@@ -1,0 +1,152 @@
+# Forge Platform — Helm values
+#
+# Override per-environment with: helm install forge ./helm -f my-values.yaml
+
+# ── Global ────────────────────────────────────────────────
+namespace:
+  # Let `helm install --create-namespace` handle creation, or pre-create the
+  # namespace if you need to seed pull-secrets before the chart renders.
+  create: false
+  name: forge
+
+# ── Images ────────────────────────────────────────────────
+images:
+  backend:
+    repository: registry.cloudforyour.work/forge-platform/forge-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  frontend:
+    repository: registry.cloudforyour.work/forge-platform/forge-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  postgres:
+    repository: postgres
+    tag: 15-alpine
+  redis:
+    repository: redis
+    tag: 7-alpine
+  opa:
+    repository: openpolicyagent/opa
+    tag: latest-rootless
+  nginx:
+    repository: nginx
+    tag: 1.27-alpine
+  otelCollector:
+    repository: otel/opentelemetry-collector-contrib
+    tag: latest
+
+imagePullSecrets:
+  - name: harbor-pull
+
+# ── Secrets ───────────────────────────────────────────────
+# In production, manage via external secret operator. These are dev defaults.
+secrets:
+  postgresPassword: "changeme-postgres"
+  forgeSecretKey: "changeme-replace-with-openssl-rand-hex-32-output-aaaaaaa"
+  forgeBroadcastWebsocketSecret: "changeme-replace-with-openssl-rand-hex-32-output-bbbb"
+  forgeAdminPassword: "changeme-admin"
+
+# ── Forge configuration ───────────────────────────────────
+forge:
+  admin:
+    user: admin
+    email: admin@forge.local
+  allowedHosts: "*"
+  csrfTrustedOrigins: "http://forge.local:30080,https://forge.local:30443,https://forge.local"
+  # Set to false when serving over plain HTTP (test cluster). Forge's
+  # custom_settings.py reads FORGE_COOKIE_SECURE for SESSION/CSRF cookies.
+  cookieSecure: "false"
+  node:
+    name: forge-node
+    type: hybrid
+  tenancyEnabled: false
+  otel:
+    enabled: true
+    endpoint: "http://forge-otel-collector:4317"
+    serviceName: forge
+    tracesSampler: parentbased_traceidratio
+    tracesSamplerArg: "0.1"
+
+# ── Postgres ──────────────────────────────────────────────
+postgres:
+  enabled: true
+  user: forge
+  database: forge
+  storage:
+    size: 8Gi
+    storageClass: ""
+  resources:
+    requests: { memory: 256Mi, cpu: 100m }
+    limits:   { memory: 1Gi,   cpu: 1000m }
+
+# ── Redis ─────────────────────────────────────────────────
+redis:
+  enabled: true
+  storage:
+    size: 2Gi
+    storageClass: ""
+  resources:
+    requests: { memory: 64Mi,  cpu: 50m }
+    limits:   { memory: 256Mi, cpu: 500m }
+
+# ── OPA (Policy-as-Code sidecar) ──────────────────────────
+opa:
+  enabled: true
+  resources:
+    requests: { memory: 64Mi,  cpu: 50m }
+    limits:   { memory: 256Mi, cpu: 500m }
+
+# ── OTel Collector ────────────────────────────────────────
+otelCollector:
+  enabled: true
+  resources:
+    requests: { memory: 128Mi, cpu: 50m }
+    limits:   { memory: 512Mi, cpu: 500m }
+
+# ── Backend (web + task) ──────────────────────────────────
+web:
+  replicas: 1
+  resources:
+    requests: { memory: 512Mi, cpu: 200m }
+    limits:   { memory: 2Gi,   cpu: 2000m }
+
+task:
+  replicas: 1
+  # forge-task runs ansible-runner with podman, which needs a privileged
+  # container and host cgroup namespace. This is k8s test-cluster style;
+  # in prod consider a dedicated worker daemonset on isolated nodes.
+  privileged: true
+  hostCgroup: true
+  resources:
+    requests: { memory: 512Mi, cpu: 200m }
+    limits:   { memory: 2Gi,   cpu: 2000m }
+
+# ── Frontend ──────────────────────────────────────────────
+frontend:
+  replicas: 1
+  resources:
+    requests: { memory: 32Mi,  cpu: 25m }
+    limits:   { memory: 128Mi, cpu: 200m }
+
+# ── Ingress ───────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: traefik
+  host: forge.local
+  tls:
+    enabled: true
+    # Pre-create the TLS secret in the forge namespace before upgrade:
+    #   openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    #     -keyout tls.key -out tls.crt -subj '/CN=forge.local' \
+    #     -addext 'subjectAltName=DNS:forge.local'
+    #   kubectl -n forge create secret tls forge-tls --cert=tls.crt --key=tls.key
+    secretName: forge-tls
+
+# ── Forge Operator ────────────────────────────────────────
+# Operator (JobTemplate / Inventory / Credential / Schedule CRDs synced
+# to the Forge REST API) is in its own repo and chart:
+#   https://github.com/forgeplatform/forge-operator
+# Install separately after Forge core is up:
+#   1) kubectl -n forge exec deploy/forge-web -- forge-manage create_oauth2_token --user admin
+#   2) helm install forge-operator <chart-path> -n forge \
+#        --set forge.token=<PAT> --set forge.url=http://forge-web.forge.svc.cluster.local:8013
