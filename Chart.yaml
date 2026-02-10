@@ -1,0 +1,19 @@
+apiVersion: v2
+name: forge
+description: Forge Platform — automation, RBAC, EDA, observability (k8s deployment)
+type: application
+version: 0.2.0
+appVersion: "2026.04.0"
+# forge-operator lives in its own repo (forgeplatform/forge-operator) and
+# is installed separately via its own helm chart:
+#   helm install forge-operator <operator-chart-source> -n forge --set forge.token=<PAT>
+# When the operator chart is published to an OCI registry / chart museum,
+# we'll add it back here as a `dependencies:` entry.
+home: https://forgeplatform.github.io
+sources:
+  - https://github.com/forgeplatform/forge-deploy
+  - https://github.com/forgeplatform/forge-backend
+  - https://github.com/forgeplatform/forge-frontend
+maintainers:
+  - name: Krstan Vjestica
+    email: office@krletron.xyz
