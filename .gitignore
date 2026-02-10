@@ -1,0 +1,12 @@
+# Helm packaging output
+*.tgz
+/dist/
+/charts/
+Chart.lock
+
+# OS / editor
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
