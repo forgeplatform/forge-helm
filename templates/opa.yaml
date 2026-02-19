@@ -1,0 +1,56 @@
+{{- if .Values.opa.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: forge-opa
+  namespace: {{ include "forge.namespace" . }}
+  labels:
+    {{- include "forge.componentLabels" (dict "root" . "component" "opa") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: opa
+      port: 8181
+      targetPort: 8181
+  selector:
+    {{- include "forge.selectorLabels" (dict "root" . "component" "opa") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forge-opa
+  namespace: {{ include "forge.namespace" . }}
+  labels:
+    {{- include "forge.componentLabels" (dict "root" . "component" "opa") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "forge.selectorLabels" (dict "root" . "component" "opa") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "forge.componentLabels" (dict "root" . "component" "opa") | nindent 8 }}
+    spec:
+      containers:
+        - name: opa
+          image: "{{ .Values.images.opa.repository }}:{{ .Values.images.opa.tag }}"
+          args: ["run", "--server", "--addr", ":8181", "--log-level", "error"]
+          ports:
+            - name: opa
+              containerPort: 8181
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8181
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8181
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.opa.resources | nindent 12 }}
+{{- end }}
