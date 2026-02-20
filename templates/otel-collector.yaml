@@ -1,0 +1,58 @@
+{{- if .Values.otelCollector.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: forge-otel-collector
+  namespace: {{ include "forge.namespace" . }}
+  labels:
+    {{- include "forge.componentLabels" (dict "root" . "component" "otel-collector") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+  selector:
+    {{- include "forge.selectorLabels" (dict "root" . "component" "otel-collector") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forge-otel-collector
+  namespace: {{ include "forge.namespace" . }}
+  labels:
+    {{- include "forge.componentLabels" (dict "root" . "component" "otel-collector") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "forge.selectorLabels" (dict "root" . "component" "otel-collector") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "forge.componentLabels" (dict "root" . "component" "otel-collector") | nindent 8 }}
+    spec:
+      containers:
+        - name: otel-collector
+          image: "{{ .Values.images.otelCollector.repository }}:{{ .Values.images.otelCollector.tag }}"
+          args: ["--config=/etc/otel/config.yaml"]
+          ports:
+            - { name: otlp-grpc, containerPort: 4317 }
+            - { name: otlp-http, containerPort: 4318 }
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel
+              readOnly: true
+          resources:
+            {{- toYaml .Values.otelCollector.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: forge-otel-config
+            items:
+              - key: config.yaml
+                path: config.yaml
+{{- end }}
