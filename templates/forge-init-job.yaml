@@ -1,0 +1,52 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Suffix with chart revision so re-installs / upgrades create a fresh Job
+  # (Job spec is otherwise immutable and would prevent helm upgrade).
+  name: forge-init-{{ .Release.Revision }}
+  namespace: {{ include "forge.namespace" . }}
+  labels:
+    {{- include "forge.componentLabels" (dict "root" . "component" "init") | nindent 4 }}
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        {{- include "forge.componentLabels" (dict "root" . "component" "init") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-deps
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for postgres..."
+              until nc -z forge-postgres 5432; do sleep 2; done
+              echo "Waiting for redis..."
+              until nc -z forge-redis 6379; do sleep 2; done
+              echo "Dependencies ready."
+      containers:
+        - name: forge-init
+          image: "{{ .Values.images.backend.repository }}:{{ .Values.images.backend.tag }}"
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          command: ["/bin/bash", "/etc/forge/init.sh"]
+          env:
+            {{- include "forge.backendEnv" . | nindent 12 }}
+          volumeMounts:
+            {{- include "forge.backendVolumeMounts" . | nindent 12 }}
+            - name: scripts
+              mountPath: /etc/forge/init.sh
+              subPath: init.sh
+              readOnly: true
+      volumes:
+        {{- include "forge.backendVolumes" . | nindent 8 }}
+        - name: scripts
+          configMap:
+            name: forge-scripts
+            defaultMode: 0755
