@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forge-task
+  namespace: {{ include "forge.namespace" . }}
+  labels:
+    {{- include "forge.componentLabels" (dict "root" . "component" "task") | nindent 4 }}
+spec:
+  replicas: {{ .Values.task.replicas }}
+  selector:
+    matchLabels:
+      {{- include "forge.selectorLabels" (dict "root" . "component" "task") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "forge.componentLabels" (dict "root" . "component" "task") | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.task.hostCgroup }}
+      hostPID: false
+      {{- end }}
+      containers:
+        - name: forge-task
+          image: "{{ .Values.images.backend.repository }}:{{ .Values.images.backend.tag }}"
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          command: ["launch_awx_task.sh"]
+          {{- if .Values.task.privileged }}
+          securityContext:
+            privileged: true
+          {{- end }}
+          env:
+            {{- include "forge.backendEnv" . | nindent 12 }}
+          volumeMounts:
+            {{- include "forge.backendVolumeMounts" . | nindent 12 }}
+            - name: scripts
+              mountPath: /etc/forge/healthcheck-task.sh
+              subPath: healthcheck-task.sh
+              readOnly: true
+            - name: scripts
+              mountPath: /etc/forge/backup.sh
+              subPath: backup.sh
+              readOnly: true
+            - name: scripts
+              mountPath: /etc/forge/restore.sh
+              subPath: restore.sh
+              readOnly: true
+            - name: backups
+              mountPath: /var/lib/awx/backups
+            {{- if .Values.task.hostCgroup }}
+            - name: cgroup
+              mountPath: /sys/fs/cgroup
+            {{- end }}
+          readinessProbe:
+            exec:
+              command: ["bash", "/etc/forge/healthcheck-task.sh"]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 10
+          livenessProbe:
+            exec:
+              command: ["bash", "/etc/forge/healthcheck-task.sh"]
+            initialDelaySeconds: 180
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 5
+          resources:
+            {{- toYaml .Values.task.resources | nindent 12 }}
+      volumes:
+        {{- include "forge.backendVolumes" . | nindent 8 }}
+        - name: scripts
+          configMap:
+            name: forge-scripts
+            defaultMode: 0755
+        - name: backups
+          emptyDir: {}
+        {{- if .Values.task.hostCgroup }}
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+            type: Directory
+        {{- end }}
