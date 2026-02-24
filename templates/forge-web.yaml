@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: forge-web
+  namespace: {{ include "forge.namespace" . }}
+  labels:
+    {{- include "forge.componentLabels" (dict "root" . "component" "web") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8013
+      targetPort: 8013
+    - name: ws
+      port: 8015
+      targetPort: 8015
+  selector:
+    {{- include "forge.selectorLabels" (dict "root" . "component" "web") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forge-web
+  namespace: {{ include "forge.namespace" . }}
+  labels:
+    {{- include "forge.componentLabels" (dict "root" . "component" "web") | nindent 4 }}
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels:
+      {{- include "forge.selectorLabels" (dict "root" . "component" "web") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "forge.componentLabels" (dict "root" . "component" "web") | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # No explicit dep on forge-init: web crashloops until DB schema is ready,
+      # which is k8s-native and avoids extra RBAC for a kubectl initContainer.
+      containers:
+        - name: forge-web
+          image: "{{ .Values.images.backend.repository }}:{{ .Values.images.backend.tag }}"
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          command: ["launch_awx_web.sh"]
+          ports:
+            - { name: http, containerPort: 8013 }
+            - { name: ws,   containerPort: 8015 }
+          env:
+            {{- include "forge.backendEnv" . | nindent 12 }}
+          volumeMounts:
+            {{- include "forge.backendVolumeMounts" . | nindent 12 }}
+            - name: nginx-internal
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+            - name: scripts
+              mountPath: /etc/forge/healthcheck-web.sh
+              subPath: healthcheck-web.sh
+              readOnly: true
+          readinessProbe:
+            exec:
+              command: ["bash", "/etc/forge/healthcheck-web.sh"]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 10
+          livenessProbe:
+            exec:
+              command: ["bash", "/etc/forge/healthcheck-web.sh"]
+            initialDelaySeconds: 180
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 5
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+      volumes:
+        {{- include "forge.backendVolumes" . | nindent 8 }}
+        - name: nginx-internal
+          configMap:
+            name: forge-nginx-internal
+        - name: scripts
+          configMap:
+            name: forge-scripts
+            defaultMode: 0755
