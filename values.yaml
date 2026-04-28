@@ -52,7 +52,12 @@ forge:
     user: admin
     email: admin@forge.local
   allowedHosts: "*"
-  csrfTrustedOrigins: "http://forge.local:30080,https://forge.local:30443,https://forge.local"
+  # NOTE: avoid the .local TLD — Avahi/mDNS (`mdns_minimal [NOTFOUND=return]`
+  # in nsswitch.conf on most desktop Linux distros) intercepts every
+  # `.local` lookup and bypasses /etc/hosts, which makes browser access
+  # to a manually-mapped forge.local fail with "Server Not Found" even
+  # though curl from the same host works. `.lan` has no such hijack.
+  csrfTrustedOrigins: "http://forge.lan:30080,https://forge.lan:30443,https://forge.lan"
   # Set to false when serving over plain HTTP (test cluster). Forge's
   # custom_settings.py reads FORGE_COOKIE_SECURE for SESSION/CSRF cookies.
   cookieSecure: "false"
@@ -137,13 +142,13 @@ frontend:
 ingress:
   enabled: true
   className: traefik
-  host: forge.local
+  host: forge.lan
   tls:
     enabled: true
     # Pre-create the TLS secret in the forge namespace before upgrade:
     #   openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    #     -keyout tls.key -out tls.crt -subj '/CN=forge.local' \
-    #     -addext 'subjectAltName=DNS:forge.local'
+    #     -keyout tls.key -out tls.crt -subj '/CN=forge.lan' \
+    #     -addext 'subjectAltName=DNS:forge.lan'
     #   kubectl -n forge create secret tls forge-tls --cert=tls.crt --key=tls.key
     secretName: forge-tls
 
