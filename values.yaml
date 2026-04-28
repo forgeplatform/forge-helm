@@ -118,8 +118,13 @@ task:
   privileged: true
   hostCgroup: true
   resources:
-    requests: { memory: 512Mi, cpu: 200m }
-    limits:   { memory: 2Gi,   cpu: 2000m }
+    # 2Gi was OOM-killed during a single Demo Project sync + hello_world
+    # run on a fresh cluster — receptor work units in /tmp die with the
+    # pod and Forge cannot recover the in-flight job. 4Gi clears that
+    # margin for the supervisord + dispatcher + receptor + ansible-runner
+    # + EE container set; lower it only if the workload is well known.
+    requests: { memory: 1Gi, cpu: 200m }
+    limits:   { memory: 4Gi, cpu: 2000m }
 
 # ── Frontend ──────────────────────────────────────────────
 frontend:
