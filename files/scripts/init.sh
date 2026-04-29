@@ -52,6 +52,24 @@ echo "==> Registering queues..."
 forge-manage register_queue --skip-checks --queuename=controlplane --instance_percent=100
 forge-manage register_queue --skip-checks --queuename=default      --instance_percent=100
 
+# A post_migrate signal in forge auto-creates the 'default' InstanceGroup
+# as is_container_group=true when running in k8s. Without a working
+# ContainerGroup that resolves to a local Receptor work type, every job
+# launch errors with 'unknown work type kubernetes-incluster-auth'.
+# Flip it back to a regular IG so register_queue's instance assignment
+# above is honored and jobs run via the local work command.
+forge-manage shell -c "
+from forge.main.models import InstanceGroup
+ig = InstanceGroup.objects.filter(name='default').first()
+if ig and ig.is_container_group:
+    ig.is_container_group = False
+    ig.pod_spec_override = ''
+    ig.save(update_fields=['is_container_group', 'pod_spec_override'])
+    print('default IG: is_container_group -> False')
+else:
+    print('default IG already non-container or missing')
+"
+
 echo "==> Creating preload data..."
 forge-manage create_preload_data --skip-checks 2>/dev/null || true
 
