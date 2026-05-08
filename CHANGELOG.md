@@ -9,6 +9,28 @@ and the chart uses SemVer (`version`) plus the upstream Forge CalVer
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-08
+
+### Added
+- `forge-assistant` deployment (PVC + Service + Deployment) wrapping
+  the all-in-one image that bundles Ollama, ChromaDB, and the FastAPI
+  service. Disabled by default (`assistant.enabled=false`); flip on
+  with `--set assistant.enabled=true` and adjust `assistant.model`,
+  `assistant.storage.size`, and `assistant.resources` to match the
+  target cluster.
+- `assistant.storage.size` (default **20Gi**) provisions the PVC that
+  holds the Ollama model cache and Chroma vector store, so the model
+  is not re-pulled on every pod restart.
+- `startupProbe` with `failureThreshold: 30` (≈5 min budget) accounts
+  for the first-boot model pull + document indexing without the
+  liveness probe killing the pod mid-bootstrap.
+
+### Notes
+- Ingress routing for the assistant is intentionally out of scope of
+  this release; the Service is reachable via cluster DNS at
+  `forge-assistant.<ns>.svc.cluster.local:8100` and can be exposed by
+  a follow-up middleware/path rule.
+
 ## [0.2.0] - 2026-04-29
 
 ### Added
