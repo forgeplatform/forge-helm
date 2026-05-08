@@ -19,6 +19,10 @@ images:
     repository: registry.cloudforyour.work/forge-platform/forge-frontend
     tag: latest
     pullPolicy: IfNotPresent
+  assistant:
+    repository: registry.cloudforyour.work/forge-platform/forge-assistant
+    tag: latest
+    pullPolicy: IfNotPresent
   postgres:
     repository: postgres
     tag: 15-alpine
@@ -137,6 +141,26 @@ frontend:
   resources:
     requests: { memory: 32Mi,  cpu: 25m }
     limits:   { memory: 128Mi, cpu: 200m }
+
+# ── Assistant (Ollama + ChromaDB + RAG, all-in-one image) ─
+assistant:
+  enabled: false
+  # gemma3:1b is the default; for higher quality at the cost of
+  # latency and memory, try llama3.1:8b (≈4.7GB) or mistral:7b (≈4.1GB).
+  # Model is pulled on first pod start and persisted to the PVC, so
+  # changing this requires either a fresh PVC or manual `ollama pull`.
+  model: "gemma3:1b"
+  logLevel: INFO
+  storage:
+    # Sized for gemma3:1b + nomic-embed-text + a few thousand chunks of
+    # docs. Bump to 30Gi+ if switching to llama3.1:8b or larger corpora.
+    size: 20Gi
+    storageClass: ""
+  resources:
+    # Ollama + Chroma + uvicorn share this budget. gemma3:1b inference
+    # peaks around 1.5GB; chunk indexing during first boot briefly spikes.
+    requests: { memory: 1Gi, cpu: 250m }
+    limits:   { memory: 4Gi, cpu: 2000m }
 
 # ── Ingress ───────────────────────────────────────────────
 ingress:

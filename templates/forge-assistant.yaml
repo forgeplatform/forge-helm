@@ -1,0 +1,93 @@
+{{- if .Values.assistant.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: forge-assistant-data
+  namespace: {{ include "forge.namespace" . }}
+  labels:
+    {{- include "forge.componentLabels" (dict "root" . "component" "assistant") | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.assistant.storage.size }}
+  {{- with .Values.assistant.storage.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: forge-assistant
+  namespace: {{ include "forge.namespace" . }}
+  labels:
+    {{- include "forge.componentLabels" (dict "root" . "component" "assistant") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8100
+      targetPort: 8100
+  selector:
+    {{- include "forge.selectorLabels" (dict "root" . "component" "assistant") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forge-assistant
+  namespace: {{ include "forge.namespace" . }}
+  labels:
+    {{- include "forge.componentLabels" (dict "root" . "component" "assistant") | nindent 4 }}
+spec:
+  # All-in-one image bundles Ollama + ChromaDB; scaling beyond 1 replica
+  # would duplicate the model cache and split the vector index, so keep
+  # this at 1 unless the data volume is moved to an external ChromaDB.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "forge.selectorLabels" (dict "root" . "component" "assistant") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "forge.componentLabels" (dict "root" . "component" "assistant") | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: forge-assistant
+          image: "{{ .Values.images.assistant.repository }}:{{ .Values.images.assistant.tag }}"
+          imagePullPolicy: {{ .Values.images.assistant.pullPolicy }}
+          ports:
+            - { name: http, containerPort: 8100 }
+          env:
+            - name: FORGE_ASSISTANT_OLLAMA_MODEL
+              value: {{ .Values.assistant.model | quote }}
+            - name: FORGE_ASSISTANT_LOG_LEVEL
+              value: {{ .Values.assistant.logLevel | quote }}
+          # First boot pulls the model (gemma3:1b ≈ 800MB) and indexes
+          # docs; tolerate up to ~5 min before declaring the pod unhealthy.
+          startupProbe:
+            httpGet: { path: /api/v1/health, port: 8100 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /api/v1/health, port: 8100 }
+            periodSeconds: 30
+          livenessProbe:
+            httpGet: { path: /api/v1/health, port: 8100 }
+            periodSeconds: 60
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            {{- toYaml .Values.assistant.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: forge-assistant-data
+{{- end }}
