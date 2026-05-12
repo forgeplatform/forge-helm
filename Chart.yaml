@@ -11,7 +11,7 @@ appVersion: "2026.04.0"
 # we'll add it back here as a `dependencies:` entry.
 home: https://forgeplatform.github.io
 sources:
-  - https://github.com/forgeplatform/forge-deploy
+  - https://github.com/forgeplatform/forge-devops
   - https://github.com/forgeplatform/forge-backend
   - https://github.com/forgeplatform/forge-frontend
 maintainers:
