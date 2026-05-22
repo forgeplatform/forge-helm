@@ -9,6 +9,15 @@ and the chart uses SemVer (`version`) plus the upstream Forge CalVer
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-22
+
+### Changed
+- Chart version bumped to **1.0.0** marking platform GA alongside
+  `forge-operator` v1.0.0 (multi-cluster control plane + 9 CRDs).
+- `appVersion` bumped to **2026.05.0** to track the backend release
+  that includes the `0208_driftalertrule_audit_fields` migration fix
+  and the `forge-assistant` 2026.05.0 cycle.
+
 ## [0.3.0] - 2026-05-08
 
 ### Added
