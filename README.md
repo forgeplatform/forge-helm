@@ -9,22 +9,22 @@ that routes `/` to the SPA and `/api`, `/admin`, `/static`, `/sso`,
 
 ## Quickstart
 
-```sh
-# Pre-create a Harbor pull-secret for the private registry images:
-kubectl create ns forge
-kubectl -n forge create secret docker-registry harbor-pull \
-    --docker-server=registry.cloudforyour.work \
-    --docker-username=admin --docker-password=<password>
+Images are published to public `ghcr.io/forgeplatform/*` — no pull secret needed.
 
+```sh
 # (Optional) Pre-create a TLS secret for the Ingress:
+kubectl create ns forge
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
     -keyout tls.key -out tls.crt -subj '/CN=forge.local' \
     -addext 'subjectAltName=DNS:forge.local,DNS:*.forge.local'
 kubectl -n forge create secret tls forge-tls --cert=tls.crt --key=tls.key
 
 # Install:
-helm install forge . -n forge -f values.yaml
+helm install forge . -n forge --create-namespace -f values.yaml
 ```
+
+If you mirror the images to a private registry, override `images.*.repository` and set
+`imagePullSecrets` in your values file.
 
 ## Layout
 

@@ -12,16 +12,16 @@ namespace:
 # ── Images ────────────────────────────────────────────────
 images:
   backend:
-    repository: registry.cloudforyour.work/forge-platform/forge-backend
-    tag: latest
+    repository: ghcr.io/forgeplatform/forge-backend
+    tag: "2026.05.0"
     pullPolicy: IfNotPresent
   frontend:
-    repository: registry.cloudforyour.work/forge-platform/forge-frontend
+    repository: ghcr.io/forgeplatform/forge-frontend
     tag: latest
     pullPolicy: IfNotPresent
   assistant:
-    repository: registry.cloudforyour.work/forge-platform/forge-assistant
-    tag: latest
+    repository: ghcr.io/forgeplatform/forge-assistant
+    tag: "2026.05.0"
     pullPolicy: IfNotPresent
   postgres:
     repository: postgres
@@ -39,8 +39,9 @@ images:
     repository: otel/opentelemetry-collector-contrib
     tag: latest
 
-imagePullSecrets:
-  - name: harbor-pull
+# Public ghcr.io images do not require pull secrets.
+# Override only when mirroring images to a private registry.
+imagePullSecrets: []
 
 # ── Secrets ───────────────────────────────────────────────
 # In production, manage via external secret operator. These are dev defaults.
