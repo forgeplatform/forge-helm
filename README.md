@@ -1,5 +1,7 @@
 # forge-helm
 
+[![CI](https://github.com/forgeplatform/forge-helm/actions/workflows/ci.yml/badge.svg)](https://github.com/forgeplatform/forge-helm/actions/workflows/ci.yml)
+
 Kubernetes Helm chart for the Forge automation platform.
 
 Deploys the full stack: PostgreSQL, Redis, OPA, OpenTelemetry Collector,
