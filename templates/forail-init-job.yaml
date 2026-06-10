@@ -3,17 +3,17 @@ kind: Job
 metadata:
   # Suffix with chart revision so re-installs / upgrades create a fresh Job
   # (Job spec is otherwise immutable and would prevent helm upgrade).
-  name: forge-init-{{ .Release.Revision }}
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-init-{{ .Release.Revision }}
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "init") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "init") | nindent 4 }}
 spec:
   backoffLimit: 6
   ttlSecondsAfterFinished: 3600
   template:
     metadata:
       labels:
-        {{- include "forge.componentLabels" (dict "root" . "component" "init") | nindent 8 }}
+        {{- include "forail.componentLabels" (dict "root" . "component" "init") | nindent 8 }}
     spec:
       restartPolicy: OnFailure
       {{- with .Values.imagePullSecrets }}
@@ -27,26 +27,26 @@ spec:
             - -c
             - |
               echo "Waiting for postgres..."
-              until nc -z forge-postgres 5432; do sleep 2; done
+              until nc -z forail-postgres 5432; do sleep 2; done
               echo "Waiting for redis..."
-              until nc -z forge-redis 6379; do sleep 2; done
+              until nc -z forail-redis 6379; do sleep 2; done
               echo "Dependencies ready."
       containers:
-        - name: forge-init
+        - name: forail-init
           image: "{{ .Values.images.backend.repository }}:{{ .Values.images.backend.tag }}"
           imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
-          command: ["/bin/bash", "/etc/forge/init.sh"]
+          command: ["/bin/bash", "/etc/forail/init.sh"]
           env:
-            {{- include "forge.backendEnv" . | nindent 12 }}
+            {{- include "forail.backendEnv" . | nindent 12 }}
           volumeMounts:
-            {{- include "forge.backendVolumeMounts" . | nindent 12 }}
+            {{- include "forail.backendVolumeMounts" . | nindent 12 }}
             - name: scripts
-              mountPath: /etc/forge/init.sh
+              mountPath: /etc/forail/init.sh
               subPath: init.sh
               readOnly: true
       volumes:
-        {{- include "forge.backendVolumes" . | nindent 8 }}
+        {{- include "forail.backendVolumes" . | nindent 8 }}
         - name: scripts
           configMap:
-            name: forge-scripts
+            name: forail-scripts
             defaultMode: 0755

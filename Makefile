@@ -1,7 +1,7 @@
-CHART      := forge
-NAMESPACE  ?= forge
-RELEASE    ?= forge
-DEPLOY_DIR ?= ../forge-deploy
+CHART      := forail
+NAMESPACE  ?= forail
+RELEASE    ?= forail
+DEPLOY_DIR ?= ../forail-deploy
 DIST       := dist
 
 .PHONY: lint
@@ -29,12 +29,12 @@ upgrade:
 uninstall:
 	helm uninstall $(RELEASE) -n $(NAMESPACE)
 
-# Sync the static config files in files/ from the upstream forge-deploy
+# Sync the static config files in files/ from the upstream forail-deploy
 # repo (cloned as a sibling at $(DEPLOY_DIR)). Run after upstream config
 # changes.
 .PHONY: sync-from-deploy
 sync-from-deploy:
-	@test -d $(DEPLOY_DIR) || { echo "ERROR: $(DEPLOY_DIR) not found — clone forge-deploy alongside forge-helm"; exit 1; }
+	@test -d $(DEPLOY_DIR) || { echo "ERROR: $(DEPLOY_DIR) not found — clone forail-deploy alongside forail-helm"; exit 1; }
 	cp $(DEPLOY_DIR)/settings/*.py             files/settings/
 	cp $(DEPLOY_DIR)/scripts/*.sh              files/scripts/
 	cp $(DEPLOY_DIR)/receptor/receptor.conf    files/receptor/

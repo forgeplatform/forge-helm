@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: forge-settings
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-settings
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "settings") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "settings") | nindent 4 }}
 data:
 {{- range $path, $_ := .Files.Glob "files/settings/*.py" }}
   {{ base $path }}: |
@@ -14,10 +14,10 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: forge-receptor
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-receptor
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "receptor") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "receptor") | nindent 4 }}
 data:
   receptor.conf: |
 {{ .Files.Get "files/receptor/receptor.conf" | indent 4 }}
@@ -25,10 +25,10 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: forge-scripts
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-scripts
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "scripts") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "scripts") | nindent 4 }}
 data:
 {{- range $path, $_ := .Files.Glob "files/scripts/*.sh" }}
   {{ base $path }}: |
@@ -38,10 +38,10 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: forge-otel-config
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-otel-config
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "otel-collector") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "otel-collector") | nindent 4 }}
 data:
   config.yaml: |
 {{ .Files.Get "files/otel/config.yaml" | indent 4 }}
@@ -49,10 +49,10 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: forge-nginx-internal
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-nginx-internal
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "web") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "web") | nindent 4 }}
 data:
   nginx.conf: |
 {{ .Files.Get "files/nginx/nginx-internal.conf" | indent 4 }}

@@ -1,38 +1,38 @@
 {{/* Common labels */}}
-{{- define "forge.labels" -}}
-app.kubernetes.io/name: forge
+{{- define "forail.labels" -}}
+app.kubernetes.io/name: forail
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
-app.kubernetes.io/part-of: forge-platform
+app.kubernetes.io/part-of: forail-platform
 helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 {{- end }}
 
 {{/* Selector labels for a given component (component name passed as second arg) */}}
-{{- define "forge.selectorLabels" -}}
-app.kubernetes.io/name: forge
+{{- define "forail.selectorLabels" -}}
+app.kubernetes.io/name: forail
 app.kubernetes.io/instance: {{ .root.Release.Name }}
 app.kubernetes.io/component: {{ .component }}
 {{- end }}
 
 {{/* Component labels = common labels + component */}}
-{{- define "forge.componentLabels" -}}
-{{ include "forge.labels" .root }}
+{{- define "forail.componentLabels" -}}
+{{ include "forail.labels" .root }}
 app.kubernetes.io/component: {{ .component }}
 {{- end }}
 
 {{/* Namespace */}}
-{{- define "forge.namespace" -}}
-{{- .Values.namespace.name | default "forge" -}}
+{{- define "forail.namespace" -}}
+{{- .Values.namespace.name | default "forail" -}}
 {{- end }}
 
 {{/*
-Common backend env vars (forge-init, forge-web, forge-task)
+Common backend env vars (forail-init, forail-web, forail-task)
 Wraps DB, Redis, secrets, OTel, admin into one block to avoid drift.
 */}}
-{{- define "forge.backendEnv" -}}
+{{- define "forail.backendEnv" -}}
 - name: DATABASE_HOST
-  value: forge-postgres
+  value: forail-postgres
 - name: DATABASE_PORT
   value: "5432"
 - name: DATABASE_USER
@@ -42,7 +42,7 @@ Wraps DB, Redis, secrets, OTel, admin into one block to avoid drift.
 - name: DATABASE_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: forge-secrets
+      name: forail-secrets
       key: postgresPassword
 - name: POSTGRES_USER
   value: {{ .Values.postgres.user | quote }}
@@ -51,60 +51,60 @@ Wraps DB, Redis, secrets, OTel, admin into one block to avoid drift.
 - name: POSTGRES_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: forge-secrets
+      name: forail-secrets
       key: postgresPassword
 - name: REDIS_HOST
-  value: forge-redis
+  value: forail-redis
 - name: REDIS_PORT
   value: "6379"
-- name: FORGE_SECRET_KEY
+- name: FORAIL_SECRET_KEY
   valueFrom:
     secretKeyRef:
-      name: forge-secrets
-      key: forgeSecretKey
-- name: FORGE_BROADCAST_WEBSOCKET_SECRET
+      name: forail-secrets
+      key: forailSecretKey
+- name: FORAIL_BROADCAST_WEBSOCKET_SECRET
   valueFrom:
     secretKeyRef:
-      name: forge-secrets
-      key: forgeBroadcastWebsocketSecret
-- name: FORGE_ADMIN_USER
-  value: {{ .Values.forge.admin.user | quote }}
-- name: FORGE_ADMIN_EMAIL
-  value: {{ .Values.forge.admin.email | quote }}
-- name: FORGE_ADMIN_PASSWORD
+      name: forail-secrets
+      key: forailBroadcastWebsocketSecret
+- name: FORAIL_ADMIN_USER
+  value: {{ .Values.forail.admin.user | quote }}
+- name: FORAIL_ADMIN_EMAIL
+  value: {{ .Values.forail.admin.email | quote }}
+- name: FORAIL_ADMIN_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: forge-secrets
-      key: forgeAdminPassword
-- name: FORGE_ALLOWED_HOSTS
-  value: {{ .Values.forge.allowedHosts | quote }}
-- name: FORGE_CSRF_TRUSTED_ORIGINS
-  value: {{ .Values.forge.csrfTrustedOrigins | quote }}
-- name: FORGE_COOKIE_SECURE
-  value: {{ .Values.forge.cookieSecure | default "true" | quote }}
-- name: FORGE_NODE_NAME
-  value: {{ .Values.forge.node.name | quote }}
-- name: FORGE_NODE_TYPE
-  value: {{ .Values.forge.node.type | quote }}
+      name: forail-secrets
+      key: forailAdminPassword
+- name: FORAIL_ALLOWED_HOSTS
+  value: {{ .Values.forail.allowedHosts | quote }}
+- name: FORAIL_CSRF_TRUSTED_ORIGINS
+  value: {{ .Values.forail.csrfTrustedOrigins | quote }}
+- name: FORAIL_COOKIE_SECURE
+  value: {{ .Values.forail.cookieSecure | default "true" | quote }}
+- name: FORAIL_NODE_NAME
+  value: {{ .Values.forail.node.name | quote }}
+- name: FORAIL_NODE_TYPE
+  value: {{ .Values.forail.node.type | quote }}
 - name: TENANCY_ENABLED
-  value: {{ .Values.forge.tenancyEnabled | quote }}
+  value: {{ .Values.forail.tenancyEnabled | quote }}
 - name: OTEL_ENABLED
-  value: {{ .Values.forge.otel.enabled | quote }}
+  value: {{ .Values.forail.otel.enabled | quote }}
 - name: OTEL_EXPORTER_ENDPOINT
-  value: {{ .Values.forge.otel.endpoint | quote }}
+  value: {{ .Values.forail.otel.endpoint | quote }}
 - name: OTEL_SERVICE_NAME
-  value: {{ .Values.forge.otel.serviceName | quote }}
+  value: {{ .Values.forail.otel.serviceName | quote }}
 - name: OTEL_TRACES_SAMPLER
-  value: {{ .Values.forge.otel.tracesSampler | quote }}
+  value: {{ .Values.forail.otel.tracesSampler | quote }}
 - name: OTEL_TRACES_SAMPLER_ARG
-  value: {{ .Values.forge.otel.tracesSamplerArg | quote }}
+  value: {{ .Values.forail.otel.tracesSamplerArg | quote }}
 {{- end }}
 
 {{/*
 Common backend volume mounts (settings, scripts, receptor, persistent data).
-Used by forge-init, forge-web, forge-task.
+Used by forail-init, forail-web, forail-task.
 */}}
-{{- define "forge.backendVolumeMounts" -}}
+{{- define "forail.backendVolumeMounts" -}}
 - name: settings
   mountPath: /etc/tower/settings.py
   subPath: settings.py
@@ -133,24 +133,24 @@ Used by forge-init, forge-web, forge-task.
   mountPath: /etc/receptor/receptor.conf
   subPath: receptor.conf
   readOnly: true
-- name: forge-projects
+- name: forail-projects
   mountPath: /var/lib/awx/projects
-- name: forge-receptor
+- name: forail-receptor
   mountPath: /var/run/awx-receptor
 {{- end }}
 
 {{/*
 Common backend volumes (settings + scripts ConfigMaps + emptyDirs for shared paths)
 */}}
-{{- define "forge.backendVolumes" -}}
+{{- define "forail.backendVolumes" -}}
 - name: settings
   configMap:
-    name: forge-settings
+    name: forail-settings
 - name: receptor
   configMap:
-    name: forge-receptor
-- name: forge-projects
+    name: forail-receptor
+- name: forail-projects
   emptyDir: {}
-- name: forge-receptor
+- name: forail-receptor
   emptyDir: {}
 {{- end }}

@@ -2,10 +2,10 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: forge
-  namespace: {{ include "forge.namespace" . }}
+  name: forail
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "ingress") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "ingress") | nindent 4 }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   {{- if .Values.ingress.tls.enabled }}
@@ -21,52 +21,52 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: forge-web
+                name: forail-web
                 port:
                   number: 8013
           - path: /admin
             pathType: Prefix
             backend:
               service:
-                name: forge-web
+                name: forail-web
                 port:
                   number: 8013
-          # SPA bundle (Vite output, base path /static/forge/) — must
+          # SPA bundle (Vite output, base path /static/forail/) — must
           # match BEFORE /static so Django staticfiles fallback applies
           # only to other prefixes (admin, rest_framework, etc.).
-          - path: /static/forge
+          - path: /static/forail
             pathType: Prefix
             backend:
               service:
-                name: forge-frontend
+                name: forail-frontend
                 port:
                   number: 80
           - path: /static
             pathType: Prefix
             backend:
               service:
-                name: forge-web
+                name: forail-web
                 port:
                   number: 8013
           - path: /sso
             pathType: Prefix
             backend:
               service:
-                name: forge-web
+                name: forail-web
                 port:
                   number: 8013
           - path: /websocket
             pathType: Prefix
             backend:
               service:
-                name: forge-web
+                name: forail-web
                 port:
                   number: 8015
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: forge-frontend
+                name: forail-frontend
                 port:
                   number: 80
 {{- end }}

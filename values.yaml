@@ -1,26 +1,26 @@
-# Forge Platform — Helm values
+# Forail Platform — Helm values
 #
-# Override per-environment with: helm install forge ./helm -f my-values.yaml
+# Override per-environment with: helm install forail ./helm -f my-values.yaml
 
 # ── Global ────────────────────────────────────────────────
 namespace:
   # Let `helm install --create-namespace` handle creation, or pre-create the
   # namespace if you need to seed pull-secrets before the chart renders.
   create: false
-  name: forge
+  name: forail
 
 # ── Images ────────────────────────────────────────────────
 images:
   backend:
-    repository: ghcr.io/forgeplatform/forge-backend
+    repository: ghcr.io/forail-platform/forail-backend
     tag: "2026.05.0"
     pullPolicy: IfNotPresent
   frontend:
-    repository: ghcr.io/forgeplatform/forge-frontend
+    repository: ghcr.io/forail-platform/forail-frontend
     tag: latest
     pullPolicy: IfNotPresent
   assistant:
-    repository: ghcr.io/forgeplatform/forge-assistant
+    repository: ghcr.io/forail-platform/forail-assistant
     tag: "2026.05.0"
     pullPolicy: IfNotPresent
   postgres:
@@ -47,41 +47,41 @@ imagePullSecrets: []
 # In production, manage via external secret operator. These are dev defaults.
 secrets:
   postgresPassword: "changeme-postgres"
-  forgeSecretKey: "changeme-replace-with-openssl-rand-hex-32-output-aaaaaaa"
-  forgeBroadcastWebsocketSecret: "changeme-replace-with-openssl-rand-hex-32-output-bbbb"
-  forgeAdminPassword: "changeme-admin"
+  forailSecretKey: "changeme-replace-with-openssl-rand-hex-32-output-aaaaaaa"
+  forailBroadcastWebsocketSecret: "changeme-replace-with-openssl-rand-hex-32-output-bbbb"
+  forailAdminPassword: "changeme-admin"
 
-# ── Forge configuration ───────────────────────────────────
-forge:
+# ── Forail configuration ───────────────────────────────────
+forail:
   admin:
     user: admin
-    email: admin@forge.local
+    email: admin@forail.local
   allowedHosts: "*"
   # NOTE: avoid the .local TLD — Avahi/mDNS (`mdns_minimal [NOTFOUND=return]`
   # in nsswitch.conf on most desktop Linux distros) intercepts every
   # `.local` lookup and bypasses /etc/hosts, which makes browser access
-  # to a manually-mapped forge.local fail with "Server Not Found" even
+  # to a manually-mapped forail.local fail with "Server Not Found" even
   # though curl from the same host works. `.lan` has no such hijack.
-  csrfTrustedOrigins: "http://forge.lan:30080,https://forge.lan:30443,https://forge.lan"
-  # Set to false when serving over plain HTTP (test cluster). Forge's
-  # custom_settings.py reads FORGE_COOKIE_SECURE for SESSION/CSRF cookies.
+  csrfTrustedOrigins: "http://forail.lan:30080,https://forail.lan:30443,https://forail.lan"
+  # Set to false when serving over plain HTTP (test cluster). Forail's
+  # custom_settings.py reads FORAIL_COOKIE_SECURE for SESSION/CSRF cookies.
   cookieSecure: "false"
   node:
-    name: forge-node
+    name: forail-node
     type: hybrid
   tenancyEnabled: false
   otel:
     enabled: true
-    endpoint: "http://forge-otel-collector:4317"
-    serviceName: forge
+    endpoint: "http://forail-otel-collector:4317"
+    serviceName: forail
     tracesSampler: parentbased_traceidratio
     tracesSamplerArg: "0.1"
 
 # ── Postgres ──────────────────────────────────────────────
 postgres:
   enabled: true
-  user: forge
-  database: forge
+  user: forail
+  database: forail
   storage:
     size: 8Gi
     storageClass: ""
@@ -122,7 +122,7 @@ web:
 
 task:
   replicas: 1
-  # forge-task runs ansible-runner with podman, which needs a privileged
+  # forail-task runs ansible-runner with podman, which needs a privileged
   # container and host cgroup namespace. This is k8s test-cluster style;
   # in prod consider a dedicated worker daemonset on isolated nodes.
   privileged: true
@@ -130,7 +130,7 @@ task:
   resources:
     # 2Gi was OOM-killed during a single Demo Project sync + hello_world
     # run on a fresh cluster — receptor work units in /tmp die with the
-    # pod and Forge cannot recover the in-flight job. 4Gi clears that
+    # pod and Forail cannot recover the in-flight job. 4Gi clears that
     # margin for the supervisord + dispatcher + receptor + ansible-runner
     # + EE container set; lower it only if the workload is well known.
     requests: { memory: 1Gi, cpu: 200m }
@@ -167,21 +167,21 @@ assistant:
 ingress:
   enabled: true
   className: traefik
-  host: forge.lan
+  host: forail.lan
   tls:
     enabled: true
-    # Pre-create the TLS secret in the forge namespace before upgrade:
+    # Pre-create the TLS secret in the forail namespace before upgrade:
     #   openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    #     -keyout tls.key -out tls.crt -subj '/CN=forge.lan' \
-    #     -addext 'subjectAltName=DNS:forge.lan'
-    #   kubectl -n forge create secret tls forge-tls --cert=tls.crt --key=tls.key
-    secretName: forge-tls
+    #     -keyout tls.key -out tls.crt -subj '/CN=forail.lan' \
+    #     -addext 'subjectAltName=DNS:forail.lan'
+    #   kubectl -n forail create secret tls forail-tls --cert=tls.crt --key=tls.key
+    secretName: forail-tls
 
-# ── Forge Operator ────────────────────────────────────────
+# ── Forail Operator ────────────────────────────────────────
 # Operator (JobTemplate / Inventory / Credential / Schedule CRDs synced
-# to the Forge REST API) is in its own repo and chart:
-#   https://github.com/forgeplatform/forge-operator
-# Install separately after Forge core is up:
-#   1) kubectl -n forge exec deploy/forge-web -- forge-manage create_oauth2_token --user admin
-#   2) helm install forge-operator <chart-path> -n forge \
-#        --set forge.token=<PAT> --set forge.url=http://forge-web.forge.svc.cluster.local:8013
+# to the Forail REST API) is in its own repo and chart:
+#   https://github.com/forail-platform/forail-operator
+# Install separately after Forail core is up:
+#   1) kubectl -n forail exec deploy/forail-web -- forail-manage create_oauth2_token --user admin
+#   2) helm install forail-operator <chart-path> -n forail \
+#        --set forail.token=<PAT> --set forail.url=http://forail-web.forail.svc.cluster.local:8013

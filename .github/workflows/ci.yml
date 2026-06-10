@@ -14,4 +14,4 @@ jobs:
         with:
           version: latest
       - run: helm lint .
-      - run: helm template forge . > /dev/null
+      - run: helm template forail . > /dev/null

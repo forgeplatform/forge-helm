@@ -2,10 +2,10 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: forge-redis-data
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-redis-data
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "redis") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "redis") | nindent 4 }}
 spec:
   accessModes: ["ReadWriteOnce"]
   {{- if .Values.redis.storage.storageClass }}
@@ -18,10 +18,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: forge-redis
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-redis
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "redis") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "redis") | nindent 4 }}
 spec:
   type: ClusterIP
   ports:
@@ -29,26 +29,26 @@ spec:
       port: 6379
       targetPort: 6379
   selector:
-    {{- include "forge.selectorLabels" (dict "root" . "component" "redis") | nindent 4 }}
+    {{- include "forail.selectorLabels" (dict "root" . "component" "redis") | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: forge-redis
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-redis
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "redis") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "redis") | nindent 4 }}
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      {{- include "forge.selectorLabels" (dict "root" . "component" "redis") | nindent 6 }}
+      {{- include "forail.selectorLabels" (dict "root" . "component" "redis") | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "forge.componentLabels" (dict "root" . "component" "redis") | nindent 8 }}
+        {{- include "forail.componentLabels" (dict "root" . "component" "redis") | nindent 8 }}
     spec:
       containers:
         - name: redis
@@ -75,5 +75,5 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: forge-redis-data
+            claimName: forail-redis-data
 {{- end }}

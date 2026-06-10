@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: {{ include "forge.namespace" . }}
+  name: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.labels" . | nindent 4 }}
+    {{- include "forail.labels" . | nindent 4 }}
 {{- end }}

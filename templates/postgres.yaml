@@ -2,10 +2,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: forge-postgres
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-postgres
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "postgres") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "postgres") | nindent 4 }}
 spec:
   type: ClusterIP
   ports:
@@ -13,25 +13,25 @@ spec:
       port: 5432
       targetPort: 5432
   selector:
-    {{- include "forge.selectorLabels" (dict "root" . "component" "postgres") | nindent 4 }}
+    {{- include "forail.selectorLabels" (dict "root" . "component" "postgres") | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: forge-postgres
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-postgres
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "postgres") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "postgres") | nindent 4 }}
 spec:
-  serviceName: forge-postgres
+  serviceName: forail-postgres
   replicas: 1
   selector:
     matchLabels:
-      {{- include "forge.selectorLabels" (dict "root" . "component" "postgres") | nindent 6 }}
+      {{- include "forail.selectorLabels" (dict "root" . "component" "postgres") | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "forge.componentLabels" (dict "root" . "component" "postgres") | nindent 8 }}
+        {{- include "forail.componentLabels" (dict "root" . "component" "postgres") | nindent 8 }}
     spec:
       containers:
         - name: postgres
@@ -47,7 +47,7 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: forge-secrets
+                  name: forail-secrets
                   key: postgresPassword
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata

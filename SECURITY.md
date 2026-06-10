@@ -39,5 +39,5 @@ In scope:
 
 Out of scope:
 
-- Vulnerabilities in the application images themselves (report to forge-backend / forge-frontend / etc.)
+- Vulnerabilities in the application images themselves (report to forail-backend / forail-frontend / etc.)
 - User-supplied values that override safe defaults

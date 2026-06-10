@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: forge-task
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-task
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "task") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "task") | nindent 4 }}
 spec:
   replicas: {{ .Values.task.replicas }}
   selector:
     matchLabels:
-      {{- include "forge.selectorLabels" (dict "root" . "component" "task") | nindent 6 }}
+      {{- include "forail.selectorLabels" (dict "root" . "component" "task") | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "forge.componentLabels" (dict "root" . "component" "task") | nindent 8 }}
+        {{- include "forail.componentLabels" (dict "root" . "component" "task") | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
@@ -22,7 +22,7 @@ spec:
       hostPID: false
       {{- end }}
       containers:
-        - name: forge-task
+        - name: forail-task
           image: "{{ .Values.images.backend.repository }}:{{ .Values.images.backend.tag }}"
           imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
           command: ["launch_awx_task.sh"]
@@ -31,19 +31,19 @@ spec:
             privileged: true
           {{- end }}
           env:
-            {{- include "forge.backendEnv" . | nindent 12 }}
+            {{- include "forail.backendEnv" . | nindent 12 }}
           volumeMounts:
-            {{- include "forge.backendVolumeMounts" . | nindent 12 }}
+            {{- include "forail.backendVolumeMounts" . | nindent 12 }}
             - name: scripts
-              mountPath: /etc/forge/healthcheck-task.sh
+              mountPath: /etc/forail/healthcheck-task.sh
               subPath: healthcheck-task.sh
               readOnly: true
             - name: scripts
-              mountPath: /etc/forge/backup.sh
+              mountPath: /etc/forail/backup.sh
               subPath: backup.sh
               readOnly: true
             - name: scripts
-              mountPath: /etc/forge/restore.sh
+              mountPath: /etc/forail/restore.sh
               subPath: restore.sh
               readOnly: true
             - name: backups
@@ -54,14 +54,14 @@ spec:
             {{- end }}
           readinessProbe:
             exec:
-              command: ["bash", "/etc/forge/healthcheck-task.sh"]
+              command: ["bash", "/etc/forail/healthcheck-task.sh"]
             initialDelaySeconds: 60
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 10
           livenessProbe:
             exec:
-              command: ["bash", "/etc/forge/healthcheck-task.sh"]
+              command: ["bash", "/etc/forail/healthcheck-task.sh"]
             initialDelaySeconds: 180
             periodSeconds: 60
             timeoutSeconds: 10
@@ -69,10 +69,10 @@ spec:
           resources:
             {{- toYaml .Values.task.resources | nindent 12 }}
       volumes:
-        {{- include "forge.backendVolumes" . | nindent 8 }}
+        {{- include "forail.backendVolumes" . | nindent 8 }}
         - name: scripts
           configMap:
-            name: forge-scripts
+            name: forail-scripts
             defaultMode: 0755
         - name: backups
           emptyDir: {}

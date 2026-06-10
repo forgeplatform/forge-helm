@@ -1,19 +1,19 @@
 apiVersion: v2
-name: forge
-description: Forge Platform — automation, RBAC, EDA, observability (k8s deployment)
+name: forail
+description: Forail Platform — automation, RBAC, EDA, observability (k8s deployment)
 type: application
 version: 1.0.0
 appVersion: "2026.05.0"
-# forge-operator lives in its own repo (forgeplatform/forge-operator) and
+# forail-operator lives in its own repo (forail-platform/forail-operator) and
 # is installed separately via its own helm chart:
-#   helm install forge-operator <operator-chart-source> -n forge --set forge.token=<PAT>
+#   helm install forail-operator <operator-chart-source> -n forail --set forail.token=<PAT>
 # When the operator chart is published to an OCI registry / chart museum,
 # we'll add it back here as a `dependencies:` entry.
-home: https://forgeplatform.github.io
+home: https://forail-platform.github.io
 sources:
-  - https://github.com/forgeplatform/forge-devops
-  - https://github.com/forgeplatform/forge-backend
-  - https://github.com/forgeplatform/forge-frontend
+  - https://github.com/forail-platform/forail-devops
+  - https://github.com/forail-platform/forail-backend
+  - https://github.com/forail-platform/forail-frontend
 maintainers:
   - name: Krstan Vjestica
     email: office@krletron.xyz

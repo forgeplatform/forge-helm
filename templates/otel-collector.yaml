@@ -2,10 +2,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: forge-otel-collector
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-otel-collector
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "otel-collector") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "otel-collector") | nindent 4 }}
 spec:
   type: ClusterIP
   ports:
@@ -16,24 +16,24 @@ spec:
       port: 4318
       targetPort: 4318
   selector:
-    {{- include "forge.selectorLabels" (dict "root" . "component" "otel-collector") | nindent 4 }}
+    {{- include "forail.selectorLabels" (dict "root" . "component" "otel-collector") | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: forge-otel-collector
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-otel-collector
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "otel-collector") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "otel-collector") | nindent 4 }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "forge.selectorLabels" (dict "root" . "component" "otel-collector") | nindent 6 }}
+      {{- include "forail.selectorLabels" (dict "root" . "component" "otel-collector") | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "forge.componentLabels" (dict "root" . "component" "otel-collector") | nindent 8 }}
+        {{- include "forail.componentLabels" (dict "root" . "component" "otel-collector") | nindent 8 }}
     spec:
       containers:
         - name: otel-collector
@@ -51,7 +51,7 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: forge-otel-config
+            name: forail-otel-config
             items:
               - key: config.yaml
                 path: config.yaml

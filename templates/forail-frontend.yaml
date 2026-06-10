@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: forge-frontend
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-frontend
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "frontend") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "frontend") | nindent 4 }}
 spec:
   type: ClusterIP
   ports:
@@ -12,30 +12,30 @@ spec:
       port: 80
       targetPort: 80
   selector:
-    {{- include "forge.selectorLabels" (dict "root" . "component" "frontend") | nindent 4 }}
+    {{- include "forail.selectorLabels" (dict "root" . "component" "frontend") | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: forge-frontend
-  namespace: {{ include "forge.namespace" . }}
+  name: forail-frontend
+  namespace: {{ include "forail.namespace" . }}
   labels:
-    {{- include "forge.componentLabels" (dict "root" . "component" "frontend") | nindent 4 }}
+    {{- include "forail.componentLabels" (dict "root" . "component" "frontend") | nindent 4 }}
 spec:
   replicas: {{ .Values.frontend.replicas }}
   selector:
     matchLabels:
-      {{- include "forge.selectorLabels" (dict "root" . "component" "frontend") | nindent 6 }}
+      {{- include "forail.selectorLabels" (dict "root" . "component" "frontend") | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "forge.componentLabels" (dict "root" . "component" "frontend") | nindent 8 }}
+        {{- include "forail.componentLabels" (dict "root" . "component" "frontend") | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: forge-frontend
+        - name: forail-frontend
           image: "{{ .Values.images.frontend.repository }}:{{ .Values.images.frontend.tag }}"
           imagePullPolicy: {{ .Values.images.frontend.pullPolicy }}
           ports:
