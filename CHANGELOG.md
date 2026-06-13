@@ -9,6 +9,13 @@ and the chart uses SemVer (`version`) plus the upstream Forail CalVer
 
 ## [Unreleased]
 
+## [2026.06.0] - 2026-06-14
+
+### Changed
+- **Renamed `forge` → `forail`** across the entire project (organization `forgeplatform` → `forail-platform`): image references and chart, image references (`ghcr.io/forail-platform/forail-*`), CLI, and all documentation/URLs. The GitHub organization and repositories were renamed to match.
+- Versioning unified across all platform components to CalVer `2026.06.0`.
+
+
 ## [1.0.0] - 2026-05-22
 
 ### Changed
