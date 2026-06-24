@@ -13,15 +13,15 @@ namespace:
 images:
   backend:
     repository: ghcr.io/forail-platform/forail-backend
-    tag: "2026.06.0"
+    tag: "2026.07.0"
     pullPolicy: IfNotPresent
   frontend:
     repository: ghcr.io/forail-platform/forail-frontend
-    tag: "2026.06.0"
+    tag: "2026.07.0"
     pullPolicy: IfNotPresent
   assistant:
     repository: ghcr.io/forail-platform/forail-assistant
-    tag: "2026.06.0"
+    tag: "2026.07.0"
     pullPolicy: IfNotPresent
   postgres:
     repository: postgres
