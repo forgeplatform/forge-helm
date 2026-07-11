@@ -44,28 +44,42 @@ images:
 imagePullSecrets: []
 
 # ── Secrets ───────────────────────────────────────────────
-# In production, manage via external secret operator. These are dev defaults.
+# The chart ships NO working secret defaults (see needtofix H3). Leave these
+# empty and the chart will auto-generate the infrastructure secrets on first
+# install and reuse them across upgrades (via a Secret lookup). In production,
+# set them explicitly or manage via an external secret operator.
+#
+# forailAdminPassword has no safe auto-value (the operator must know it), so it
+# is REQUIRED: `helm install` fails unless you provide one, e.g.
+#   --set secrets.forailAdminPassword="$(openssl rand -base64 24)"
 secrets:
-  postgresPassword: "changeme-postgres"
-  forailSecretKey: "changeme-replace-with-openssl-rand-hex-32-output-aaaaaaa"
-  forailBroadcastWebsocketSecret: "changeme-replace-with-openssl-rand-hex-32-output-bbbb"
-  forailAdminPassword: "changeme-admin"
+  # Auto-generated when empty (override to pin an explicit value):
+  postgresPassword: ""
+  forailSecretKey: ""
+  forailBroadcastWebsocketSecret: ""
+  # Required — no default; install fails if unset:
+  forailAdminPassword: ""
 
 # ── Forail configuration ───────────────────────────────────
 forail:
   admin:
     user: admin
     email: admin@forail.local
-  allowedHosts: "*"
+  # needtofix M9: do NOT default to "*" (Host-header injection → cache
+  # poisoning / poisoned password-reset links). Keep this in sync with
+  # ingress.host; add extra comma-separated hosts as needed.
+  allowedHosts: "forail.lan"
   # NOTE: avoid the .local TLD — Avahi/mDNS (`mdns_minimal [NOTFOUND=return]`
   # in nsswitch.conf on most desktop Linux distros) intercepts every
   # `.local` lookup and bypasses /etc/hosts, which makes browser access
   # to a manually-mapped forail.local fail with "Server Not Found" even
   # though curl from the same host works. `.lan` has no such hijack.
   csrfTrustedOrigins: "http://forail.lan:30080,https://forail.lan:30443,https://forail.lan"
-  # Set to false when serving over plain HTTP (test cluster). Forail's
-  # custom_settings.py reads FORAIL_COOKIE_SECURE for SESSION/CSRF cookies.
-  cookieSecure: "false"
+  # needtofix M8: default Secure cookies on (ingress TLS is on by default).
+  # Set to "false" only when serving over plain HTTP (e.g. a local dev run
+  # without TLS). Forail's custom_settings.py reads FORAIL_COOKIE_SECURE for
+  # SESSION/CSRF cookies.
+  cookieSecure: "true"
   node:
     name: forail-node
     type: hybrid
@@ -122,11 +136,14 @@ web:
 
 task:
   replicas: 1
-  # forail-task runs ansible-runner with podman, which needs a privileged
-  # container and host cgroup namespace. This is k8s test-cluster style;
-  # in prod consider a dedicated worker daemonset on isolated nodes.
-  privileged: true
-  hostCgroup: true
+  # needtofix H4: forail-task runs ansible-runner with podman, which CAN want
+  # a privileged container + host cgroup namespace. Both default OFF now — a
+  # privileged pod with a host cgroup mount is a trivial container escape to
+  # node-root. Opt in explicitly for the podman-in-pod execution path, and
+  # isolate such workers onto dedicated tainted nodes:
+  #   --set task.privileged=true --set task.hostCgroup=true
+  privileged: false
+  hostCgroup: false
   resources:
     # 2Gi was OOM-killed during a single Demo Project sync + hello_world
     # run on a fresh cluster — receptor work units in /tmp die with the
