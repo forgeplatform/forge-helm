@@ -1,0 +1,93 @@
+{{- /*
+needtofix M11: tiered NetworkPolicy. Off by default (see values.networkPolicy);
+enable only on a policy-enforcing CNI after validation. The intent:
+
+  - default-deny all ingress in the namespace, then
+  - Postgres accepts 5432 only from web + task,
+  - Redis accepts 6379 only from web + task,
+  - web/frontend accept their HTTP/WS ports from anywhere (the ingress).
+
+Datastore ports are thereby unreachable from arbitrary pods on a flat network.
+*/ -}}
+{{- if .Values.networkPolicy.enabled }}
+{{- $ns := include "forail.namespace" . -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: forail-default-deny-ingress
+  namespace: {{ $ns }}
+  labels:
+    {{- include "forail.componentLabels" (dict "root" . "component" "netpol") | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+  # No ingress rules → deny all; the allow policies below add exceptions.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: forail-postgres-ingress
+  namespace: {{ $ns }}
+  labels:
+    {{- include "forail.componentLabels" (dict "root" . "component" "netpol") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: postgres
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: web
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: task
+      ports:
+        - { protocol: TCP, port: 5432 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: forail-redis-ingress
+  namespace: {{ $ns }}
+  labels:
+    {{- include "forail.componentLabels" (dict "root" . "component" "netpol") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: redis
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: web
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: task
+      ports:
+        - { protocol: TCP, port: 6379 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: forail-http-ingress
+  namespace: {{ $ns }}
+  labels:
+    {{- include "forail.componentLabels" (dict "root" . "component" "netpol") | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values: ["web", "frontend"]
+  policyTypes: ["Ingress"]
+  ingress:
+    # Allow the HTTP/WS ports from any source (ingress controller terminates
+    # external traffic). Tighten to the ingress namespace/pod once known.
+    - ports:
+        - { protocol: TCP, port: 8013 }
+        - { protocol: TCP, port: 8015 }
+        - { protocol: TCP, port: 80 }
+{{- end }}

@@ -56,10 +56,16 @@ spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: forail-assistant
           image: "{{ .Values.images.assistant.repository }}:{{ .Values.images.assistant.tag }}"
           imagePullPolicy: {{ .Values.images.assistant.pullPolicy }}
+          {{- with .Values.securityContext.assistant }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - { name: http, containerPort: 8100 }
           env:

@@ -34,10 +34,16 @@ spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: forail-frontend
           image: "{{ .Values.images.frontend.repository }}:{{ .Values.images.frontend.tag }}"
           imagePullPolicy: {{ .Values.images.frontend.pullPolicy }}
+          {{- with .Values.securityContext.frontend }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - { name: http, containerPort: 80 }
           readinessProbe:
