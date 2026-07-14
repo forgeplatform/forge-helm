@@ -9,6 +9,21 @@ and the chart uses SemVer (`version`) plus the upstream Forail CalVer
 
 ## [Unreleased]
 
+### Security
+- **No working secret defaults**: `postgresPassword`, `forailSecretKey` and
+  `forailBroadcastWebsocketSecret` are auto-generated on first install and
+  reused across upgrades (via a Secret `lookup`). `forailAdminPassword` is now
+  **required** — `helm install` fails unless you provide one.
+- **`forail-task` defaults to non-privileged** with no host cgroup mount. Opt in
+  for the podman-in-pod execution path: `--set task.privileged=true --set
+  task.hostCgroup=true`.
+- **Secure cookies on by default** (`forail.cookieSecure: "true"`) and
+  `forail.allowedHosts` defaults to the ingress host instead of `"*"`.
+- **Opt-in NetworkPolicy** (`networkPolicy.enabled`, default false): default-deny
+  ingress with scoped allows so Postgres/Redis aren't reachable cluster-wide.
+- **Per-workload `securityContext` / `podSecurityContext`** values wired into
+  web / frontend / assistant (empty by default, pending per-image validation).
+
 ## [2026.06.0] - 2026-06-14
 
 ### Changed
