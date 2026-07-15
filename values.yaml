@@ -158,6 +158,19 @@ task:
     requests: { memory: 1Gi, cpu: 200m }
     limits:   { memory: 4Gi, cpu: 2000m }
 
+# ── Job-execution RBAC ────────────────────────────────────
+# The forail-task scheduler launches every automation job as a pod in a
+# Kubernetes container group; receptor manages those pods with the task pod's
+# ServiceAccount. That account therefore needs namespaced pod RBAC — without it
+# each launch fails ("pods is forbidden ... cannot list resource pods") and the
+# job stays pending. See templates/rbac.yaml. Disable both only when you wire an
+# external execution node and want no in-cluster job pods.
+serviceAccount:
+  create: true
+  name: forail
+rbac:
+  create: true
+
 # ── Frontend ──────────────────────────────────────────────
 frontend:
   replicas: 1

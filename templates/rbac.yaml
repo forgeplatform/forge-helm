@@ -1,0 +1,53 @@
+{{/*
+Job-execution RBAC.
+
+The forail-task scheduler runs each automation job in a Kubernetes "container
+group": receptor lists, creates and deletes those job pods through the task
+pod's ServiceAccount. Without pod RBAC in this namespace every launch fails
+with "pods is forbidden: User \"system:serviceaccount:<ns>:default\" cannot
+list resource \"pods\"", and the job never leaves pending. The Role below is
+scoped to this namespace only (no cluster-wide pod access) and paired with the
+MY_POD_NAMESPACE downward-API env so pods land here, where the grant applies.
+*/}}
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "forail.serviceAccountName" . }}
+  namespace: {{ include "forail.namespace" . }}
+  labels:
+    {{- include "forail.componentLabels" (dict "root" . "component" "rbac") | nindent 4 }}
+{{- end }}
+{{- if .Values.rbac.create }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: forail-job-runner
+  namespace: {{ include "forail.namespace" . }}
+  labels:
+    {{- include "forail.componentLabels" (dict "root" . "component" "rbac") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log", "pods/attach", "pods/exec"]
+    verbs: ["get", "list", "watch", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: forail-job-runner
+  namespace: {{ include "forail.namespace" . }}
+  labels:
+    {{- include "forail.componentLabels" (dict "root" . "component" "rbac") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: forail-job-runner
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "forail.serviceAccountName" . }}
+    namespace: {{ include "forail.namespace" . }}
+{{- end }}
