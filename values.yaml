@@ -69,9 +69,11 @@ forail:
     user: admin
     email: admin@forail.local
   # needtofix M9: do NOT default to "*" (Host-header injection → cache
-  # poisoning / poisoned password-reset links). Keep this in sync with
-  # ingress.host; add extra comma-separated hosts as needed.
-  allowedHosts: "forail.lan"
+  # poisoning / poisoned password-reset links). Keep the ingress host in sync
+  # here; 127.0.0.1 and localhost MUST stay in the list because the in-cluster
+  # liveness/readiness probes reach the app over the loopback address (Django
+  # rejects any Host not listed with HTTP 400, which would crash-loop the pod).
+  allowedHosts: "forail.lan,127.0.0.1,localhost"
   # NOTE: avoid the .local TLD — Avahi/mDNS (`mdns_minimal [NOTFOUND=return]`
   # in nsswitch.conf on most desktop Linux distros) intercepts every
   # `.local` lookup and bypasses /etc/hosts, which makes browser access
