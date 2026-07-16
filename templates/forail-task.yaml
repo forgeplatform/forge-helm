@@ -15,6 +15,7 @@ spec:
       labels:
         {{- include "forail.componentLabels" (dict "root" . "component" "task") | nindent 8 }}
     spec:
+      serviceAccountName: {{ include "forail.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}
