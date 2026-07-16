@@ -21,12 +21,39 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
     -addext 'subjectAltName=DNS:forail.local,DNS:*.forail.local'
 kubectl -n forail create secret tls forail-tls --cert=tls.crt --key=tls.key
 
-# Install:
-helm install forail . -n forail --create-namespace -f values.yaml
+# Install (admin password is required — install fails without it):
+helm install forail . -n forail --create-namespace -f values.yaml \
+    --set secrets.forailAdminPassword="$(openssl rand -base64 24)"
 ```
 
 If you mirror the images to a private registry, override `images.*.repository` and set
 `imagePullSecrets` in your values file.
+
+## Secure defaults & breaking changes
+
+This chart ships **no working secret defaults**:
+
+- `secrets.postgresPassword`, `secrets.forailSecretKey` and
+  `secrets.forailBroadcastWebsocketSecret` are **auto-generated** on first
+  install and reused across upgrades — leave them empty unless you want to pin
+  explicit values.
+- `secrets.forailAdminPassword` is **required**; `helm install` fails if unset.
+- `forail-task` runs **non-privileged by default**. The podman-in-pod job
+  execution path needs privileges — enable it explicitly and, ideally, isolate
+  such workers onto dedicated tainted nodes:
+
+  ```sh
+  --set task.privileged=true --set task.hostCgroup=true
+  ```
+
+- Session cookies are `Secure` by default (`forail.cookieSecure: "true"`) and
+  `forail.allowedHosts` defaults to the ingress host (not `"*"`).
+- `networkPolicy.enabled` (default false) adds a default-deny ingress policy with
+  scoped allows so Postgres/Redis aren't reachable cluster-wide. Enable it on a
+  policy-enforcing CNI (Calico/Cilium) — k3s' default flannel does not enforce it.
+- `podSecurityContext` and per-workload `securityContext.{web,frontend,assistant}`
+  are available for pod hardening (empty by default; validate per image — the
+  frontend binds `:80` and needs `NET_BIND_SERVICE` or a non-root port).
 
 ## Layout
 

@@ -13,15 +13,15 @@ namespace:
 images:
   backend:
     repository: ghcr.io/forail-platform/forail-backend
-    tag: "2026.06.0"
+    tag: "2026.07.0"
     pullPolicy: IfNotPresent
   frontend:
     repository: ghcr.io/forail-platform/forail-frontend
-    tag: "2026.06.0"
+    tag: "2026.07.0"
     pullPolicy: IfNotPresent
   assistant:
     repository: ghcr.io/forail-platform/forail-assistant
-    tag: "2026.06.0"
+    tag: "2026.07.0"
     pullPolicy: IfNotPresent
   postgres:
     repository: postgres
@@ -31,12 +31,15 @@ images:
     tag: 7-alpine
   opa:
     repository: openpolicyagent/opa
+    # needtofix L15: pin to an immutable version tag (e.g. 0.70.0-rootless)
+    # before shipping — a floating tag drifts and undermines supply-chain trust.
     tag: latest-rootless
   nginx:
     repository: nginx
     tag: 1.27-alpine
   otelCollector:
     repository: otel/opentelemetry-collector-contrib
+    # needtofix L15: pin to an immutable version tag (e.g. 0.110.0) before shipping.
     tag: latest
 
 # Public ghcr.io images do not require pull secrets.
@@ -44,28 +47,44 @@ images:
 imagePullSecrets: []
 
 # ── Secrets ───────────────────────────────────────────────
-# In production, manage via external secret operator. These are dev defaults.
+# The chart ships NO working secret defaults (see needtofix H3). Leave these
+# empty and the chart will auto-generate the infrastructure secrets on first
+# install and reuse them across upgrades (via a Secret lookup). In production,
+# set them explicitly or manage via an external secret operator.
+#
+# forailAdminPassword has no safe auto-value (the operator must know it), so it
+# is REQUIRED: `helm install` fails unless you provide one, e.g.
+#   --set secrets.forailAdminPassword="$(openssl rand -base64 24)"
 secrets:
-  postgresPassword: "changeme-postgres"
-  forailSecretKey: "changeme-replace-with-openssl-rand-hex-32-output-aaaaaaa"
-  forailBroadcastWebsocketSecret: "changeme-replace-with-openssl-rand-hex-32-output-bbbb"
-  forailAdminPassword: "changeme-admin"
+  # Auto-generated when empty (override to pin an explicit value):
+  postgresPassword: ""
+  forailSecretKey: ""
+  forailBroadcastWebsocketSecret: ""
+  # Required — no default; install fails if unset:
+  forailAdminPassword: ""
 
 # ── Forail configuration ───────────────────────────────────
 forail:
   admin:
     user: admin
     email: admin@forail.local
-  allowedHosts: "*"
+  # needtofix M9: do NOT default to "*" (Host-header injection → cache
+  # poisoning / poisoned password-reset links). Keep the ingress host in sync
+  # here; 127.0.0.1 and localhost MUST stay in the list because the in-cluster
+  # liveness/readiness probes reach the app over the loopback address (Django
+  # rejects any Host not listed with HTTP 400, which would crash-loop the pod).
+  allowedHosts: "forail.lan,127.0.0.1,localhost"
   # NOTE: avoid the .local TLD — Avahi/mDNS (`mdns_minimal [NOTFOUND=return]`
   # in nsswitch.conf on most desktop Linux distros) intercepts every
   # `.local` lookup and bypasses /etc/hosts, which makes browser access
   # to a manually-mapped forail.local fail with "Server Not Found" even
   # though curl from the same host works. `.lan` has no such hijack.
   csrfTrustedOrigins: "http://forail.lan:30080,https://forail.lan:30443,https://forail.lan"
-  # Set to false when serving over plain HTTP (test cluster). Forail's
-  # custom_settings.py reads FORAIL_COOKIE_SECURE for SESSION/CSRF cookies.
-  cookieSecure: "false"
+  # needtofix M8: default Secure cookies on (ingress TLS is on by default).
+  # Set to "false" only when serving over plain HTTP (e.g. a local dev run
+  # without TLS). Forail's custom_settings.py reads FORAIL_COOKIE_SECURE for
+  # SESSION/CSRF cookies.
+  cookieSecure: "true"
   node:
     name: forail-node
     type: hybrid
@@ -122,11 +141,14 @@ web:
 
 task:
   replicas: 1
-  # forail-task runs ansible-runner with podman, which needs a privileged
-  # container and host cgroup namespace. This is k8s test-cluster style;
-  # in prod consider a dedicated worker daemonset on isolated nodes.
-  privileged: true
-  hostCgroup: true
+  # needtofix H4: forail-task runs ansible-runner with podman, which CAN want
+  # a privileged container + host cgroup namespace. Both default OFF now — a
+  # privileged pod with a host cgroup mount is a trivial container escape to
+  # node-root. Opt in explicitly for the podman-in-pod execution path, and
+  # isolate such workers onto dedicated tainted nodes:
+  #   --set task.privileged=true --set task.hostCgroup=true
+  privileged: false
+  hostCgroup: false
   resources:
     # 2Gi was OOM-killed during a single Demo Project sync + hello_world
     # run on a fresh cluster — receptor work units in /tmp die with the
@@ -135,6 +157,19 @@ task:
     # + EE container set; lower it only if the workload is well known.
     requests: { memory: 1Gi, cpu: 200m }
     limits:   { memory: 4Gi, cpu: 2000m }
+
+# ── Job-execution RBAC ────────────────────────────────────
+# The forail-task scheduler launches every automation job as a pod in a
+# Kubernetes container group; receptor manages those pods with the task pod's
+# ServiceAccount. That account therefore needs namespaced pod RBAC — without it
+# each launch fails ("pods is forbidden ... cannot list resource pods") and the
+# job stays pending. See templates/rbac.yaml. Disable both only when you wire an
+# external execution node and want no in-cluster job pods.
+serviceAccount:
+  create: true
+  name: forail
+rbac:
+  create: true
 
 # ── Frontend ──────────────────────────────────────────────
 frontend:
@@ -162,6 +197,28 @@ assistant:
     # peaks around 1.5GB; chunk indexing during first boot briefly spikes.
     requests: { memory: 1Gi, cpu: 250m }
     limits:   { memory: 4Gi, cpu: 2000m }
+
+# ── Network policy (needtofix M11) ────────────────────────
+# Off by default: k3s' default flannel CNI does not enforce NetworkPolicy, and
+# a default-deny would silently do nothing there while breaking traffic on a
+# CNI that DOES enforce it. Enable on a policy-capable cluster (Calico/Cilium)
+# after validating: default-deny ingress + scoped allows between tiers so that
+# Postgres:5432 / Redis:6379 are not reachable cluster-wide.
+networkPolicy:
+  enabled: false
+
+# ── Pod hardening (needtofix M10) ─────────────────────────
+# Per-workload securityContext. Empty by default (no behaviour change) so the
+# chart stays deployable while each context is validated per image — note the
+# frontend binds :80 and needs NET_BIND_SERVICE or a non-root port before caps
+# can be dropped. The operator chart is the reference model to copy:
+#   runAsNonRoot: true, allowPrivilegeEscalation: false,
+#   capabilities: { drop: ["ALL"] }, readOnlyRootFilesystem: true
+podSecurityContext: {}
+securityContext:
+  web: {}
+  frontend: {}
+  assistant: {}
 
 # ── Ingress ───────────────────────────────────────────────
 ingress:

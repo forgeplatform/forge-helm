@@ -34,15 +34,22 @@ spec:
       labels:
         {{- include "forail.componentLabels" (dict "root" . "component" "web") | nindent 8 }}
     spec:
+      serviceAccountName: {{ include "forail.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}
       # No explicit dep on forail-init: web crashloops until DB schema is ready,
       # which is k8s-native and avoids extra RBAC for a kubectl initContainer.
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: forail-web
           image: "{{ .Values.images.backend.repository }}:{{ .Values.images.backend.tag }}"
           imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          {{- with .Values.securityContext.web }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
           command: ["launch_awx_web.sh"]
           ports:
             - { name: http, containerPort: 8013 }
