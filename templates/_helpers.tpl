@@ -98,6 +98,26 @@ Wraps DB, Redis, secrets, OTel, admin into one block to avoid drift.
   value: {{ .Values.forail.otel.tracesSampler | quote }}
 - name: OTEL_TRACES_SAMPLER_ARG
   value: {{ .Values.forail.otel.tracesSamplerArg | quote }}
+# Namespace the container-group scheduler launches automation job pods into
+# (AWX_CONTAINER_GROUP_DEFAULT_NAMESPACE reads MY_POD_NAMESPACE). Bind it to
+# the release namespace via the downward API so jobs run where the pod RBAC
+# in rbac.yaml is granted, not the cluster "default" namespace.
+- name: MY_POD_NAMESPACE
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.namespace
+{{- end }}
+
+{{/*
+Name of the ServiceAccount the web/task/init pods run as. When
+serviceAccount.create is false, fall back to the namespace "default" account.
+*/}}
+{{- define "forail.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- .Values.serviceAccount.name -}}
+{{- else -}}
+default
+{{- end -}}
 {{- end }}
 
 {{/*
