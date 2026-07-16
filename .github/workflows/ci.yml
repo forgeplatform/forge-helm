@@ -13,5 +13,8 @@ jobs:
       - uses: azure/setup-helm@v4
         with:
           version: latest
-      - run: helm lint .
-      - run: helm template forail . > /dev/null
+      # needtofix H3 makes secrets.forailAdminPassword required, so the render
+      # checks must supply a throwaway value (never a real secret — this only
+      # exercises template rendering, nothing is deployed).
+      - run: helm lint . --set secrets.forailAdminPassword=ci-render-check
+      - run: helm template forail . --set secrets.forailAdminPassword=ci-render-check > /dev/null
