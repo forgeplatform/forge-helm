@@ -47,13 +47,38 @@ This chart ships **no working secret defaults**:
   ```
 
 - Session cookies are `Secure` by default (`forail.cookieSecure: "true"`) and
-  `forail.allowedHosts` defaults to the ingress host (not `"*"`).
+  `forail.allowedHosts` defaults to the ingress host plus `127.0.0.1,localhost`
+  (not `"*"`). **Keep the loopback entries** — the liveness/readiness probes call
+  the API on `127.0.0.1`, and Django answers `400 DisallowedHost` without them,
+  which crash-loops `forail-web`.
 - `networkPolicy.enabled` (default false) adds a default-deny ingress policy with
   scoped allows so Postgres/Redis aren't reachable cluster-wide. Enable it on a
   policy-enforcing CNI (Calico/Cilium) — k3s' default flannel does not enforce it.
 - `podSecurityContext` and per-workload `securityContext.{web,frontend,assistant}`
   are available for pod hardening (empty by default; validate per image — the
   frontend binds `:80` and needs `NET_BIND_SERVICE` or a non-root port).
+
+## Running jobs in the cluster
+
+Automation jobs run as pods in a Kubernetes **container group**: `forail-task`
+asks receptor to create, watch and delete one pod per job. Three pieces must be
+in place, all shipped by the chart:
+
+1. **Pod RBAC** — `serviceAccount.create` and `rbac.create` (both default true)
+   render a `forail` ServiceAccount and a *namespaced* `forail-job-runner`
+   `Role`/`RoleBinding` covering `pods` and `pods/log|attach|exec`. Web, task and
+   the init Job run under that account. Turn them off only when you run jobs on
+   an external execution node and want no in-cluster job pods; otherwise every
+   launch fails with `pods is forbidden ... cannot list resource "pods"` and the
+   job stays pending.
+2. **Namespace** — the `MY_POD_NAMESPACE` downward-API env makes job pods land in
+   the release namespace, which is exactly where the Role grants access.
+3. **Receptor worktype** — `files/receptor/receptor.conf` registers
+   `kubernetes-incluster-auth` (`authmethod: incluster`). Without it launches
+   fail at 0s with `unknown work type kubernetes-incluster-auth`.
+
+The podman-in-pod execution path additionally needs `--set task.privileged=true
+--set task.hostCgroup=true` (see the secure defaults above).
 
 ## Layout
 
@@ -62,8 +87,8 @@ forail-helm/
 ├── Chart.yaml
 ├── values.yaml
 ├── Makefile          # lint / template / package / sync-from-deploy
-├── templates/        # 14 templates (postgres, redis, opa, otel,
-│                       forail-web/task/frontend/init, ingress, ...)
+├── templates/        # 16 templates (postgres, redis, opa, otel,
+│                       forail-web/task/frontend/init, ingress, rbac, ...)
 └── files/            # static configs consumed via Helm Files.Get
     ├── settings/     # Forail backend settings.py modules
     ├── scripts/      # init.sh, healthcheck-*.sh, backup/restore

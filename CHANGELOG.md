@@ -9,6 +9,29 @@ and the chart uses SemVer (`version`) plus the upstream Forail CalVer
 
 ## [Unreleased]
 
+### Added
+- **Job-execution RBAC** (`templates/rbac.yaml`): a `forail` ServiceAccount plus
+  a namespaced `Role`/`RoleBinding` (`forail-job-runner`) granting
+  `pods` + `pods/log|attach|exec` in the release namespace, and a
+  `MY_POD_NAMESPACE` downward-API env so the Kubernetes container group launches
+  job pods there instead of `default`. Web, task and the init Job now run under
+  that account. Without it every launch failed with
+  `pods is forbidden ... cannot list resource "pods"` and the job stayed pending.
+  Toggles: `serviceAccount.create` / `serviceAccount.name` / `rbac.create`.
+- **Receptor `kubernetes-incluster-auth` worktype** in
+  `files/receptor/receptor.conf` — the mesh config previously declared only the
+  `local` worktype, so in-cluster launches errored immediately with
+  `unknown work type kubernetes-incluster-auth`.
+
+### Fixed
+- **Loopback hosts kept in `forail.allowedHosts`** (`forail.lan,127.0.0.1,localhost`).
+  The in-cluster liveness/readiness probes curl `http://127.0.0.1:8013/api/v2/ping/`;
+  with the ingress host alone Django answered `400 DisallowedHost`, the probe
+  failed and `forail-web` crash-looped. Add your own hosts to the list rather
+  than replacing the loopback entries.
+- **Chart render checks in CI** pass a throwaway `secrets.forailAdminPassword`,
+  so the now-required password does not fail `helm lint` / `helm template`.
+
 ### Security
 - **No working secret defaults**: `postgresPassword`, `forailSecretKey` and
   `forailBroadcastWebsocketSecret` are auto-generated on first install and
@@ -18,7 +41,8 @@ and the chart uses SemVer (`version`) plus the upstream Forail CalVer
   for the podman-in-pod execution path: `--set task.privileged=true --set
   task.hostCgroup=true`.
 - **Secure cookies on by default** (`forail.cookieSecure: "true"`) and
-  `forail.allowedHosts` defaults to the ingress host instead of `"*"`.
+  `forail.allowedHosts` defaults to the ingress host plus loopback instead of
+  `"*"`.
 - **Opt-in NetworkPolicy** (`networkPolicy.enabled`, default false): default-deny
   ingress with scoped allows so Postgres/Redis aren't reachable cluster-wide.
 - **Per-workload `securityContext` / `podSecurityContext`** values wired into
