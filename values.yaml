@@ -21,7 +21,12 @@ images:
     pullPolicy: IfNotPresent
   assistant:
     repository: ghcr.io/forail-platform/forail-assistant
-    tag: "2026.07.0"
+    # forail-assistant is NOT part of the 2026.07.0 release -- it ships
+    # disabled (assistant.enabled=false below) and was not built or tested for
+    # it, so this stays on the last published build. Pointing it at a tag that
+    # was never pushed would give ImagePullBackOff the moment anyone enabled
+    # it. Bump this in lockstep the next time the assistant is released.
+    tag: "2026.06.0"
     pullPolicy: IfNotPresent
   postgres:
     repository: postgres
