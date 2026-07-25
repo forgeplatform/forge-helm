@@ -21,7 +21,12 @@ images:
     pullPolicy: IfNotPresent
   assistant:
     repository: ghcr.io/forail-platform/forail-assistant
-    tag: "2026.07.0"
+    # forail-assistant is NOT part of the 2026.07.0 release -- it ships
+    # disabled (assistant.enabled=false below) and was not built or tested for
+    # it, so this stays on the last published build. Pointing it at a tag that
+    # was never pushed would give ImagePullBackOff the moment anyone enabled
+    # it. Bump this in lockstep the next time the assistant is released.
+    tag: "2026.06.0"
     pullPolicy: IfNotPresent
   postgres:
     repository: postgres
@@ -73,6 +78,12 @@ forail:
   # here; 127.0.0.1 and localhost MUST stay in the list because the in-cluster
   # liveness/readiness probes reach the app over the loopback address (Django
   # rejects any Host not listed with HTTP 400, which would crash-loop the pod).
+  # The chart also appends the forail-web Service DNS names (forail-web,
+  # forail-web.<ns>, forail-web.<ns>.svc, forail-web.<ns>.svc.cluster.local) to
+  # whatever you set here, so in-cluster clients that call the Service directly
+  # — forail-operator with
+  # --set forail.url=http://forail-web.<ns>.svc.cluster.local:8013 — are not
+  # rejected. Do not list them here yourself.
   allowedHosts: "forail.lan,127.0.0.1,localhost"
   # NOTE: avoid the .local TLD — Avahi/mDNS (`mdns_minimal [NOTFOUND=return]`
   # in nsswitch.conf on most desktop Linux distros) intercepts every
@@ -242,3 +253,6 @@ ingress:
 #   1) kubectl -n forail exec deploy/forail-web -- forail-manage create_oauth2_token --user admin
 #   2) helm install forail-operator <chart-path> -n forail \
 #        --set forail.token=<PAT> --set forail.url=http://forail-web.forail.svc.cluster.local:8013
+# That Service DNS name is covered by forail.allowedHosts automatically (see
+# above). If you point the operator at the ingress host instead, or front it
+# with another name, pass --set forail.hostHeader=<host in allowedHosts>.

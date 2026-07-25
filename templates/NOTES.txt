@@ -1,0 +1,39 @@
+Forail {{ .Chart.AppVersion }} installed into namespace {{ .Release.Namespace }}.
+
+{{- if .Values.ingress.enabled }}
+
+  URL:    http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}
+          Map {{ .Values.ingress.host }} to any node running the ingress controller.
+{{- end }}
+  Admin:  admin
+
+Check the rollout with:
+
+  kubectl -n {{ .Release.Namespace }} get pods
+
+{{- if not .Values.task.privileged }}
+
+────────────────────────────────────────────────────────────────────────
+ WARNING — job execution is NOT enabled in this install.
+────────────────────────────────────────────────────────────────────────
+
+forail-task runs project updates and automation jobs through podman inside
+the task pod, and podman cannot mount its overlay storage in a
+non-privileged container. With task.privileged=false every job fails a
+moment after launch with
+
+  [graphdriver] prior storage driver overlay failed:
+    mount /var/lib/containers/storage/overlay: permission denied
+
+and the only thing visible in the UI is a project or job stuck in "Pending".
+
+This is the safe default on purpose: a privileged pod with a host cgroup
+mount is a trivial container escape to node-root. Enable it only when you
+have somewhere safe to run it -- ideally dedicated, tainted execution
+nodes:
+
+  helm upgrade {{ .Release.Name }} ... \
+    --set task.privileged=true \
+    --set task.hostCgroup=true
+
+{{- end }}

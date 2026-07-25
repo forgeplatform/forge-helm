@@ -76,8 +76,18 @@ Wraps DB, Redis, secrets, OTel, admin into one block to avoid drift.
     secretKeyRef:
       name: forail-secrets
       key: forailAdminPassword
+{{- $ns := include "forail.namespace" . }}
 - name: FORAIL_ALLOWED_HOSTS
-  value: {{ .Values.forail.allowedHosts | quote }}
+  {{- /*
+    In-cluster consumers reach the API through the forail-web Service, so their
+    Host header is the Service DNS name, never the ingress host. Django answers
+    400 ("The request could not be understood by the server.") for any Host not
+    listed, which broke the documented forail-operator install
+    (--set forail.url=http://forail-web.<ns>.svc.cluster.local:8013). These four
+    names are cluster-internal and derived from the release, so appending them
+    keeps needtofix M9 tight while making in-cluster access work by default.
+  */}}
+  value: {{ printf "%s,forail-web,forail-web.%s,forail-web.%s.svc,forail-web.%s.svc.cluster.local" .Values.forail.allowedHosts $ns $ns $ns | quote }}
 - name: FORAIL_CSRF_TRUSTED_ORIGINS
   value: {{ .Values.forail.csrfTrustedOrigins | quote }}
 - name: FORAIL_COOKIE_SECURE

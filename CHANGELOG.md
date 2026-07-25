@@ -31,6 +31,14 @@ and the chart uses SemVer (`version`) plus the upstream Forail CalVer
   than replacing the loopback entries.
 - **Chart render checks in CI** pass a throwaway `secrets.forailAdminPassword`,
   so the now-required password does not fail `helm lint` / `helm template`.
+- **In-cluster callers are no longer rejected by `forail.allowedHosts`.** Clients
+  that reach the API through the `forail-web` Service send the Service DNS name
+  as their `Host`, which the hardened list did not cover, so Django answered
+  `400` — the documented forail-operator install
+  (`--set forail.url=http://forail-web.<ns>.svc.cluster.local:8013`) could not
+  resolve a single object. The chart now appends `forail-web`,
+  `forail-web.<ns>`, `forail-web.<ns>.svc` and `forail-web.<ns>.svc.cluster.local`
+  to whatever `forail.allowedHosts` is set to. Unknown hosts are still rejected.
 
 ### Security
 - **No working secret defaults**: `postgresPassword`, `forailSecretKey` and
