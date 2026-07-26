@@ -9,6 +9,24 @@ and the chart uses SemVer (`version`) plus the upstream Forail CalVer
 
 ## [Unreleased]
 
+## [2026.7.1] - 2026-07-26
+
+### Fixed
+- **An upgrade no longer leaves the `default` queue unable to run anything.**
+  `register_queue` assigns instances only when it creates the group, so on an
+  upgrade it printed `Instance Group already registered default` and assigned
+  nothing — and an empty regular instance group accepts job launches and never
+  runs them. The init Job now asserts membership itself, alongside the
+  container-group flag it already asserted.
+
+### Changed
+- `images.backend.tag` pinned to `2026.07.1`, which carries the matching backend
+  fix: the task pod used to re-register itself as `control` and flip `default`
+  back to a ContainerGroup on every start, undoing what this Job sets. The
+  frontend stays at `2026.07.0` — it is unchanged.
+
+## [2026.7.0] - 2026-07-25
+
 ### Added
 - **Job-execution RBAC** (`templates/rbac.yaml`): a `forail` ServiceAccount plus
   a namespaced `Role`/`RoleBinding` (`forail-job-runner`) granting

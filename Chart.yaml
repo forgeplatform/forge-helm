@@ -2,8 +2,8 @@ apiVersion: v2
 name: forail
 description: Forail Platform — automation, RBAC, EDA, observability (k8s deployment)
 type: application
-version: 2026.7.0
-appVersion: "2026.07.0"
+version: 2026.7.1
+appVersion: "2026.07.1"
 # forail-operator lives in its own repo (forail-platform/forail-operator) and
 # is installed separately via its own helm chart:
 #   helm install forail-operator <operator-chart-source> -n forail --set forail.token=<PAT>
