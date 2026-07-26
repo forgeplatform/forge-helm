@@ -30,44 +30,49 @@ forail-manage provision_instance --skip-checks \
     --hostname="${NODE_NAME}" \
     --node_type="${NODE_TYPE}"
 
-# provision_instance only inserts if missing — it does not update an
-# already-registered instance. forail-web auto-registers itself as
-# 'control' on first startup before this Job runs, so without this
-# explicit ORM update the cluster ends up with node_type=control and
-# refuses to execute jobs (it can only orchestrate). Force-set the
-# requested type so launches stay on this instance via the local
-# Receptor work command instead of routing to a ContainerGroup.
-forail-manage shell -c "
-from forail.main.models import Instance
-i = Instance.objects.filter(hostname='${NODE_NAME}').first()
-if i and i.node_type != '${NODE_TYPE}':
-    i.node_type = '${NODE_TYPE}'
-    i.save(update_fields=['node_type'])
-    print('Updated', i.hostname, 'node_type ->', i.node_type)
-else:
-    print('Instance node_type already', i.node_type if i else 'missing')
-"
-
 echo "==> Registering queues..."
 forail-manage register_queue --skip-checks --queuename=controlplane --instance_percent=100
 forail-manage register_queue --skip-checks --queuename=default      --instance_percent=100
 
-# A post_migrate signal in forail auto-creates the 'default' InstanceGroup
-# as is_container_group=true when running in k8s. Without a working
-# ContainerGroup that resolves to a local Receptor work type, every job
-# launch errors with 'unknown work type kubernetes-incluster-auth'.
-# Flip it back to a regular IG so register_queue's instance assignment
-# above is honored and jobs run via the local work command.
+# Three things the 'default' group needs that the commands above do not
+# reliably leave behind:
+#
+#  1. is_container_group=false. A post_migrate signal auto-creates 'default' as
+#     a ContainerGroup on k8s, and without a work type that resolves locally
+#     every launch errors with 'unknown work type kubernetes-incluster-auth'.
+#  2. Membership. On an UPGRADE the group already exists, so register_queue
+#     prints "Instance Group already registered" and assigns no instance. The
+#     group is left empty and every job sits in "pending" forever, with nothing
+#     in the UI or the logs to say why.
+#  3. node_type, as a backstop. The real fix for that one is in the backend —
+#     the task pod re-runs provision_instance on every start and used to
+#     re-register as 'control' unconditionally, undoing whatever this Job set;
+#     it now honours FORAIL_NODE_TYPE. Keep the assertion so a newer chart
+#     paired with an older backend image still converges.
 forail-manage shell -c "
-from forail.main.models import InstanceGroup
+from forail.main.models import Instance, InstanceGroup
 ig = InstanceGroup.objects.filter(name='default').first()
-if ig and ig.is_container_group:
-    ig.is_container_group = False
-    ig.pod_spec_override = ''
-    ig.save(update_fields=['is_container_group', 'pod_spec_override'])
-    print('default IG: is_container_group -> False')
+if not ig:
+    print('default IG missing — register_queue did not create it')
 else:
-    print('default IG already non-container or missing')
+    if ig.is_container_group:
+        ig.is_container_group = False
+        ig.pod_spec_override = ''
+        ig.save(update_fields=['is_container_group', 'pod_spec_override'])
+        print('default IG: is_container_group -> False')
+    i = Instance.objects.filter(hostname='${NODE_NAME}').first()
+    if not i:
+        print('instance ${NODE_NAME} missing — cannot assign to default IG')
+    else:
+        if i.node_type != '${NODE_TYPE}':
+            i.node_type = '${NODE_TYPE}'
+            i.save(update_fields=['node_type'])
+            print('instance node_type ->', i.node_type)
+        if not ig.instances.filter(pk=i.pk).exists():
+            ig.instances.add(i)
+            print('default IG: added', i.hostname)
+        else:
+            print('default IG already contains', i.hostname)
 "
 
 echo "==> Creating preload data..."
