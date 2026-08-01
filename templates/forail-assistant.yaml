@@ -15,6 +15,25 @@ spec:
   storageClassName: {{ . | quote }}
   {{- end }}
 ---
+# Model blobs get their own claim: they are far larger than the vector index,
+# they survive a rebuild of the assistant, and keeping them apart means the
+# index PVC does not have to be sized for whatever model is configured.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: forail-assistant-ollama-models
+  namespace: {{ include "forail.namespace" . }}
+  labels:
+    {{- include "forail.componentLabels" (dict "root" . "component" "assistant-ollama") | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.assistant.ollama.storage.size }}
+  {{- with .Values.assistant.ollama.storage.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -31,6 +50,102 @@ spec:
   selector:
     {{- include "forail.selectorLabels" (dict "root" . "component" "assistant") | nindent 4 }}
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: forail-assistant-ollama
+  namespace: {{ include "forail.namespace" . }}
+  labels:
+    {{- include "forail.componentLabels" (dict "root" . "component" "assistant-ollama") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 11434
+      targetPort: 11434
+  selector:
+    {{- include "forail.selectorLabels" (dict "root" . "component" "assistant-ollama") | nindent 4 }}
+---
+# Model server, separate from the API on purpose. Only this pod needs a GPU,
+# so only this pod carries the GPU resource request and node placement; the
+# API stays schedulable anywhere.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forail-assistant-ollama
+  namespace: {{ include "forail.namespace" . }}
+  labels:
+    {{- include "forail.componentLabels" (dict "root" . "component" "assistant-ollama") | nindent 4 }}
+spec:
+  # One replica: replicas do not share the model cache, and each would pull
+  # the model again onto its own volume.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "forail.selectorLabels" (dict "root" . "component" "assistant-ollama") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "forail.componentLabels" (dict "root" . "component" "assistant-ollama") | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.assistant.ollama.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.assistant.ollama.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: ollama
+          image: "{{ .Values.images.assistantOllama.repository }}:{{ .Values.images.assistantOllama.tag }}"
+          imagePullPolicy: {{ .Values.images.assistantOllama.pullPolicy }}
+          {{- with .Values.securityContext.assistantOllama }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - { name: http, containerPort: 11434 }
+          env:
+            - name: OLLAMA_HOST
+              value: "0.0.0.0:11434"
+          # No HTTP probe path is guaranteed beyond `/`, which answers as soon
+          # as the server is listening — that is exactly what the API waits for.
+          startupProbe:
+            httpGet: { path: /, port: 11434 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet: { path: /, port: 11434 }
+            periodSeconds: 30
+          livenessProbe:
+            httpGet: { path: /, port: 11434 }
+            periodSeconds: 60
+            failureThreshold: 3
+          volumeMounts:
+            - name: models
+              mountPath: /root/.ollama
+          resources:
+            requests:
+              {{- toYaml .Values.assistant.ollama.resources.requests | nindent 14 }}
+            limits:
+              {{- toYaml .Values.assistant.ollama.resources.limits | nindent 14 }}
+              {{- if .Values.assistant.ollama.gpu.enabled }}
+              # Kubernetes mirrors extended-resource limits into requests, so
+              # this alone pins the pod to a GPU node advertising the device.
+              nvidia.com/gpu: {{ .Values.assistant.ollama.gpu.count }}
+              {{- end }}
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: forail-assistant-ollama-models
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -39,9 +154,9 @@ metadata:
   labels:
     {{- include "forail.componentLabels" (dict "root" . "component" "assistant") | nindent 4 }}
 spec:
-  # All-in-one image bundles Ollama + ChromaDB; scaling beyond 1 replica
-  # would duplicate the model cache and split the vector index, so keep
-  # this at 1 unless the data volume is moved to an external ChromaDB.
+  # The image bundles ChromaDB as an embedded index on the PVC; scaling beyond
+  # 1 replica would split the vector index, so keep this at 1 unless the data
+  # volume is moved to an external ChromaDB.
   replicas: 1
   strategy:
     type: Recreate
@@ -69,12 +184,15 @@ spec:
           ports:
             - { name: http, containerPort: 8100 }
           env:
+            - name: FORAIL_ASSISTANT_OLLAMA_BASE_URL
+              value: "http://forail-assistant-ollama.{{ include "forail.namespace" . }}.svc.cluster.local:11434"
             - name: FORAIL_ASSISTANT_OLLAMA_MODEL
               value: {{ .Values.assistant.model | quote }}
             - name: FORAIL_ASSISTANT_LOG_LEVEL
               value: {{ .Values.assistant.logLevel | quote }}
-          # First boot pulls the model (gemma3:1b ≈ 800MB) and indexes
-          # docs; tolerate up to ~5 min before declaring the pod unhealthy.
+          # First boot waits for Ollama, pulls the model (gemma3:1b ≈ 800MB)
+          # over its API, and indexes docs; tolerate up to ~5 min before
+          # declaring the pod unhealthy.
           startupProbe:
             httpGet: { path: /api/v1/health, port: 8100 }
             initialDelaySeconds: 30
