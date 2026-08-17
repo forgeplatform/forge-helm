@@ -9,6 +9,37 @@ and the chart uses SemVer (`version`) plus the upstream Forail CalVer
 
 ## [Unreleased]
 
+### Added
+- **`forail-assistant-ollama` Deployment, Service and PVC.** The model server is
+  no longer part of the assistant image; it runs beside it from
+  `images.assistantOllama` (`ollama/ollama`, pinned). The Service is ClusterIP —
+  Ollama has no authentication, so only the API is allowed to reach it.
+- `assistant.ollama.gpu.enabled` requests `nvidia.com/gpu` **on that pod alone**,
+  so only the model server has to land on a GPU node while the API stays
+  schedulable anywhere. Off by default: the request pins the pod to a node
+  advertising the device, so without one the pod stays `Pending`.
+- `assistant.ollama.{nodeSelector,tolerations,storage,resources}` for placing and
+  sizing the model server independently of the API.
+
+### Changed
+- `images.assistantOllama` is pinned to `ollama/ollama:0.30.10` rather than
+  tracking `latest`. The assistant image used to carry a binary copied out of
+  `latest`, and an upstream layout change broke inference silently — the server
+  answered `/api/tags` so the health check passed, while every generation
+  returned 500. Bump this tag deliberately.
+- `assistant.resources` drops to `512Mi/250m` requests and `2Gi/1000m` limits:
+  inference left this pod, so the budget only has to cover Chroma, uvicorn and
+  the first-boot indexing spike.
+
+### Breaking
+- **`assistant.storage.size` 20Gi → 5Gi.** Model blobs moved to
+  `forail-assistant-ollama-models` (20Gi), so the index claim is now sized by
+  the corpus. PVCs cannot shrink: an existing install with `assistant.enabled=true`
+  will fail the upgrade on the immutable field. Either delete the
+  `forail-assistant-data` claim — the vector index rebuilds itself from
+  `docs_to_index/`, nothing irreplaceable is stored there — or keep the old size
+  with `--set assistant.storage.size=20Gi`. Fresh installs need no action.
+
 ## [2026.7.1] - 2026-07-26
 
 ### Fixed
