@@ -57,6 +57,11 @@ This chart ships **no working secret defaults**:
 - `podSecurityContext` and per-workload `securityContext.{web,frontend,assistant}`
   are available for pod hardening (empty by default; validate per image — the
   frontend binds `:80` and needs `NET_BIND_SERVICE` or a non-root port).
+- **`assistant.storage.size` dropped 20Gi → 5Gi** when the model server moved to
+  its own claim. PVCs cannot shrink, so an existing install with the assistant
+  enabled keeps its 20Gi claim and the upgrade fails on the immutable field —
+  delete `forail-assistant-data` (the vector index rebuilds itself) or pin
+  `--set assistant.storage.size=20Gi`. Fresh installs are unaffected.
 
 ## Running jobs in the cluster
 
@@ -79,6 +84,37 @@ in place, all shipped by the chart:
 
 The podman-in-pod execution path additionally needs `--set task.privileged=true
 --set task.hostCgroup=true` (see the secure defaults above).
+
+## AI assistant (optional)
+
+Off by default (`assistant.enabled=false`). When enabled it renders **two**
+Deployments, not one:
+
+| Workload | Contains | Claim |
+|----------|----------|-------|
+| `forail-assistant` | FastAPI + embedded ChromaDB | `forail-assistant-data`, 5Gi |
+| `forail-assistant-ollama` | the model server, `images.assistantOllama` | `forail-assistant-ollama-models`, 20Gi |
+
+They are split so that only the model server needs a GPU and a large volume;
+the API stays schedulable on any node. Ollama has no authentication, so its
+Service is ClusterIP and only the API talks to it.
+
+```sh
+# CPU (default)
+helm upgrade forail . -n forail --set assistant.enabled=true
+
+# GPU — requires a node advertising nvidia.com/gpu and the NVIDIA device plugin
+helm upgrade forail . -n forail \
+    --set assistant.enabled=true \
+    --set assistant.ollama.gpu.enabled=true
+```
+
+`assistant.ollama.gpu.enabled` requests `nvidia.com/gpu`, which pins that pod
+to a node advertising the device — leave it off until the cluster has one, or
+the pod stays `Pending`. `images.assistantOllama.tag` is pinned deliberately:
+the assistant image used to carry a binary copied out of `ollama/ollama:latest`,
+and an upstream layout change broke inference without a line of our code
+changing. Bump it on purpose.
 
 ## Layout
 

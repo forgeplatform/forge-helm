@@ -28,6 +28,13 @@ images:
     # it. Bump this in lockstep the next time the assistant is released.
     tag: "2026.06.0"
     pullPolicy: IfNotPresent
+  assistantOllama:
+    # Model server for the assistant. Pinned on purpose: the assistant image
+    # used to carry a copy of the Ollama binary taken from `latest`, and an
+    # upstream layout change broke inference silently. Bump deliberately.
+    repository: ollama/ollama
+    tag: "0.30.10"
+    pullPolicy: IfNotPresent
   postgres:
     repository: postgres
     tag: 15-alpine
@@ -199,15 +206,40 @@ assistant:
   model: "gemma3:1b"
   logLevel: INFO
   storage:
-    # Sized for gemma3:1b + nomic-embed-text + a few thousand chunks of
-    # docs. Bump to 30Gi+ if switching to llama3.1:8b or larger corpora.
-    size: 20Gi
+    # ChromaDB index only — models live on the ollama claim below. Sized for
+    # a few thousand chunks of docs; the corpus, not the model, drives this.
+    # NOTE: this dropped from 20Gi when Ollama moved to its own Deployment.
+    # PVCs cannot shrink, so an existing install needs a fresh claim.
+    size: 5Gi
     storageClass: ""
   resources:
-    # Ollama + Chroma + uvicorn share this budget. gemma3:1b inference
-    # peaks around 1.5GB; chunk indexing during first boot briefly spikes.
-    requests: { memory: 1Gi, cpu: 250m }
-    limits:   { memory: 4Gi, cpu: 2000m }
+    # Chroma + uvicorn only; inference is no longer in this pod. Indexing
+    # during first boot is the peak here.
+    requests: { memory: 512Mi, cpu: 250m }
+    limits:   { memory: 2Gi, cpu: 1000m }
+
+  # ── Model server ────────────────────────────────────────
+  # Runs as its own Deployment so that only it needs a GPU and a large volume.
+  ollama:
+    gpu:
+      # Requests nvidia.com/gpu, which pins the pod to a node advertising the
+      # device — so it stays off until the cluster actually has one and the
+      # NVIDIA device plugin is installed. Without it Ollama runs on CPU.
+      enabled: false
+      count: 1
+    nodeSelector: {}
+    tolerations: []
+    storage:
+      # gemma3:1b (≈800MB) + nomic-embed-text with room to spare. Bump to
+      # 30Gi+ before switching to an 8B-class model.
+      size: 20Gi
+      storageClass: ""
+    resources:
+      # CPU inference is memory-hungry and slow; on GPU most of the model
+      # sits in VRAM instead. Sized for gemma3:1b — raise both alongside
+      # `assistant.model`.
+      requests: { memory: 2Gi, cpu: 500m }
+      limits:   { memory: 6Gi, cpu: 4000m }
 
 # ── Network policy (needtofix M11) ────────────────────────
 # Off by default: k3s' default flannel CNI does not enforce NetworkPolicy, and
@@ -230,6 +262,7 @@ securityContext:
   web: {}
   frontend: {}
   assistant: {}
+  assistantOllama: {}
 
 # ── Ingress ───────────────────────────────────────────────
 ingress:
