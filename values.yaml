@@ -87,6 +87,13 @@ secrets:
   # and the websocket channel layer -- readable, writable, and one FLUSHALL from
   # empty. Generated on first install and reused on upgrade, like the others.
   redisPassword: ""
+  # Bearer token the assistant requires on its chat endpoint. Only used when
+  # assistant.enabled=true; generated on first install and reused on upgrade.
+  # Whatever proxies /assistant to the Service must send it as
+  # `Authorization: Bearer <token>` -- the chart does not expose the assistant
+  # through the Ingress, deliberately, so nothing outside the cluster reaches it
+  # until an operator routes it and configures that header.
+  assistantChatToken: ""
   # Required — no default; install fails if unset:
   forailAdminPassword: ""
 
