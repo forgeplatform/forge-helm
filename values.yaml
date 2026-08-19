@@ -43,16 +43,26 @@ images:
     tag: 7-alpine
   opa:
     repository: openpolicyagent/opa
-    # needtofix L15: pin to an immutable version tag (e.g. 0.70.0-rootless)
-    # before shipping — a floating tag drifts and undermines supply-chain trust.
-    tag: latest-rootless
+    # Pinned. This is the same image `latest-rootless` has served since
+    # 2023-10-26 -- upstream stopped publishing `-rootless` variants after
+    # 0.58.0, so that tag is a frozen orphan rather than a moving target, and
+    # this pin changes nothing about what runs. (The earlier TODO here suggested
+    # 0.70.0-rootless; that tag does not exist.)
+    #
+    # Moving off 0.58.0 means choosing a different image, not bumping a number,
+    # and OPA 1.x defaults to Rego v1 -- so it needs the policies the backend
+    # pushes to be checked first. Deliberately a separate decision.
+    tag: 0.58.0-rootless
   nginx:
     repository: nginx
     tag: 1.27-alpine
   otelCollector:
     repository: otel/opentelemetry-collector-contrib
-    # needtofix L15: pin to an immutable version tag (e.g. 0.110.0) before shipping.
-    tag: latest
+    # Pinned. Unlike OPA's, this `latest` really does move -- it was rebuilt on
+    # 2026-08-18 -- so the same chart version was installing different collector
+    # builds over time. 0.159.0 is the release `latest` points at today, so this
+    # pin also changes nothing about what runs right now.
+    tag: 0.159.0
 
 # Public ghcr.io images do not require pull secrets.
 # Override only when mirroring images to a private registry.
