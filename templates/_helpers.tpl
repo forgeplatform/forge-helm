@@ -101,6 +101,9 @@ Wraps DB, Redis, secrets, OTel, admin into one block to avoid drift.
   value: {{ .Values.forail.node.name | quote }}
 - name: FORAIL_NODE_TYPE
   value: {{ .Values.forail.node.type | quote }}
+{{- if and (has .Values.forail.node.type (list "hybrid" "execution")) (not .Values.task.privileged) }}
+{{- fail "forail.node.type=hybrid runs jobs through podman inside the task pod, which needs --set task.privileged=true --set task.hostCgroup=true. Without them podman fails on the overlay mount and every job stays Pending. Either set both, or use the default forail.node.type=control, which runs jobs as separate Kubernetes pods and needs no privileges." }}
+{{- end }}
 {{- if and .Values.forail.tenancyEnabled (not .Values.forail.tenancy.rls) }}
 {{- fail "forail.tenancyEnabled=true requires forail.tenancy.rls=true — without row-level security the tenancy features run with no boundary behind them. Set --set forail.tenancy.rls=true, or turn tenancy off." }}
 {{- end }}

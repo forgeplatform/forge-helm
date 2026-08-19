@@ -57,6 +57,22 @@ This chart ships **no working secret defaults**:
 - `podSecurityContext` and per-workload `securityContext.{web,frontend,assistant}`
   are available for pod hardening (empty by default; validate per image — the
   frontend binds `:80` and needs `NET_BIND_SERVICE` or a non-root port).
+- **Job execution defaults to Kubernetes container groups** (`forail.node.type`
+  is now `control`, was `hybrid`). Jobs run as separate pods rather than through
+  podman inside the task pod, so no workload needs privileges. An install that
+  wants the podman path must now say so *and* enable it: `hybrid` without
+  `task.privileged=true` fails the render instead of producing an install where
+  every job stays `Pending`.
+- **Redis now requires a password.** Generated on first install, reused on
+  upgrade. An existing install picks it up on the next `helm upgrade`; nothing
+  outside the chart should be talking to that Service, but anything that is will
+  need the credential from `forail-secrets`.
+- **`forail.tenancyEnabled=true` now requires `forail.tenancy.rls=true`.** The
+  previous single switch turned on the tenancy features with no row-level
+  security behind them.
+- **Every workload now drops all capabilities and refuses privilege escalation**
+  by default, with the frontend keeping `NET_BIND_SERVICE`. Override per workload
+  under `securityContext.*`; set a key to `{}` to opt out.
 - **`assistant.storage.size` dropped 20Gi → 5Gi** when the model server moved to
   its own claim. PVCs cannot shrink, so an existing install with the assistant
   enabled keeps its 20Gi claim and the upgrade fails on the immutable field —
@@ -82,8 +98,17 @@ in place, all shipped by the chart:
    `kubernetes-incluster-auth` (`authmethod: incluster`). Without it launches
    fail at 0s with `unknown work type kubernetes-incluster-auth`.
 
-The podman-in-pod execution path additionally needs `--set task.privileged=true
---set task.hostCgroup=true` (see the secure defaults above).
+This is the default (`forail.node.type=control`) and needs no privileges
+anywhere.
+
+The alternative, `forail.node.type=hybrid`, runs jobs through podman *inside* the
+task pod and requires `--set task.privileged=true --set task.hostCgroup=true`.
+Without both, podman fails on the overlay mount and every job stays `Pending`.
+
+Those were previously the defaults in the wrong combination — `hybrid` with
+`privileged: false` — which is the one pairing that cannot run a job at all. The
+render now refuses it and says which of the two configurations to pick, rather
+than installing something whose main function is broken.
 
 ## AI assistant (optional)
 

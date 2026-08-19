@@ -127,7 +127,21 @@ forail:
   cookieSecure: "true"
   node:
     name: forail-node
-    type: hybrid
+    # control  — jobs run as separate Kubernetes pods, submitted to receptor as
+    #            the "kubernetes-incluster-auth" work type. Everything this needs
+    #            already ships in the chart: the worktype in receptor.conf, the
+    #            namespaced pod RBAC in rbac.yaml, and MY_POD_NAMESPACE from the
+    #            downward API. Needs no privileges anywhere.
+    # hybrid   — the task pod runs jobs itself, through podman inside the
+    #            container. That path REQUIRES task.privileged=true and
+    #            task.hostCgroup=true below; without them podman fails on the
+    #            overlay mount and every job stays Pending.
+    #
+    # This defaulted to hybrid while task.privileged defaulted to false, which is
+    # the one combination that cannot run a job at all -- the safer half of each
+    # pair, adding up to an install where the product's main function is broken.
+    # The render now refuses that combination outright (see _helpers.tpl).
+    type: control
   # ── Multi-tenancy ───────────────────────────────────────
   # tenancyEnabled alone used to be the only switch the chart offered, while the
   # controls that actually enforce isolation defaulted to off in the backend and
