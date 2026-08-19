@@ -32,9 +32,15 @@ spec:
       labels:
         {{- include "forail.componentLabels" (dict "root" . "component" "opa") | nindent 8 }}
     spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: opa
           image: "{{ .Values.images.opa.repository }}:{{ .Values.images.opa.tag }}"
+          {{- with .Values.securityContext.opa }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
           args: ["run", "--server", "--addr", ":8181", "--log-level", "error"]
           ports:
             - name: opa

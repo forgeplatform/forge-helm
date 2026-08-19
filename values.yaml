@@ -43,16 +43,26 @@ images:
     tag: 7-alpine
   opa:
     repository: openpolicyagent/opa
-    # needtofix L15: pin to an immutable version tag (e.g. 0.70.0-rootless)
-    # before shipping — a floating tag drifts and undermines supply-chain trust.
-    tag: latest-rootless
+    # Pinned. This is the same image `latest-rootless` has served since
+    # 2023-10-26 -- upstream stopped publishing `-rootless` variants after
+    # 0.58.0, so that tag is a frozen orphan rather than a moving target, and
+    # this pin changes nothing about what runs. (The earlier TODO here suggested
+    # 0.70.0-rootless; that tag does not exist.)
+    #
+    # Moving off 0.58.0 means choosing a different image, not bumping a number,
+    # and OPA 1.x defaults to Rego v1 -- so it needs the policies the backend
+    # pushes to be checked first. Deliberately a separate decision.
+    tag: 0.58.0-rootless
   nginx:
     repository: nginx
     tag: 1.27-alpine
   otelCollector:
     repository: otel/opentelemetry-collector-contrib
-    # needtofix L15: pin to an immutable version tag (e.g. 0.110.0) before shipping.
-    tag: latest
+    # Pinned. Unlike OPA's, this `latest` really does move -- it was rebuilt on
+    # 2026-08-18 -- so the same chart version was installing different collector
+    # builds over time. 0.159.0 is the release `latest` points at today, so this
+    # pin also changes nothing about what runs right now.
+    tag: 0.159.0
 
 # Public ghcr.io images do not require pull secrets.
 # Override only when mirroring images to a private registry.
@@ -72,6 +82,18 @@ secrets:
   postgresPassword: ""
   forailSecretKey: ""
   forailBroadcastWebsocketSecret: ""
+  # Redis requirepass. A ClusterIP Service is reachable by every pod that can
+  # route to it, and an unauthenticated Redis holds the cache, the task queue
+  # and the websocket channel layer -- readable, writable, and one FLUSHALL from
+  # empty. Generated on first install and reused on upgrade, like the others.
+  redisPassword: ""
+  # Bearer token the assistant requires on its chat endpoint. Only used when
+  # assistant.enabled=true; generated on first install and reused on upgrade.
+  # Whatever proxies /assistant to the Service must send it as
+  # `Authorization: Bearer <token>` -- the chart does not expose the assistant
+  # through the Ingress, deliberately, so nothing outside the cluster reaches it
+  # until an operator routes it and configures that header.
+  assistantChatToken: ""
   # Required — no default; install fails if unset:
   forailAdminPassword: ""
 
@@ -105,8 +127,41 @@ forail:
   cookieSecure: "true"
   node:
     name: forail-node
-    type: hybrid
+    # control  — jobs run as separate Kubernetes pods, submitted to receptor as
+    #            the "kubernetes-incluster-auth" work type. Everything this needs
+    #            already ships in the chart: the worktype in receptor.conf, the
+    #            namespaced pod RBAC in rbac.yaml, and MY_POD_NAMESPACE from the
+    #            downward API. Needs no privileges anywhere.
+    # hybrid   — the task pod runs jobs itself, through podman inside the
+    #            container. That path REQUIRES task.privileged=true and
+    #            task.hostCgroup=true below; without them podman fails on the
+    #            overlay mount and every job stays Pending.
+    #
+    # This defaulted to hybrid while task.privileged defaulted to false, which is
+    # the one combination that cannot run a job at all -- the safer half of each
+    # pair, adding up to an install where the product's main function is broken.
+    # The render now refuses that combination outright (see _helpers.tpl).
+    type: control
+  # ── Multi-tenancy ───────────────────────────────────────
+  # tenancyEnabled alone used to be the only switch the chart offered, while the
+  # controls that actually enforce isolation defaulted to off in the backend and
+  # had no value here at all -- so turning it on gave the tenancy features
+  # (quotas, branding, isolation auditing) with nothing enforcing a boundary.
+  #
+  # The chart now refuses that combination: tenancy.enabled=true requires
+  # tenancy.rls=true. Set tenancy.strictIsolation=true to block cross-tenant
+  # access rather than only audit it.
   tenancyEnabled: false
+  tenancy:
+    # Row-Level Security. Postgres policies scope rows to the requesting
+    # tenant's organization; without it "multi-tenant" means only that the UI
+    # shows a tenant name.
+    rls: true
+    # False audits cross-tenant access and allows it; true returns 403. Still
+    # requires the organization's own tenant_isolation_strict flag.
+    strictIsolation: false
+    # Per-tenant API rate limiting. Needs Redis.
+    rateLimiting: false
   otel:
     enabled: true
     endpoint: "http://forail-otel-collector:4317"
@@ -250,18 +305,53 @@ assistant:
 networkPolicy:
   enabled: false
 
-# ── Pod hardening (needtofix M10) ─────────────────────────
-# Per-workload securityContext. Empty by default (no behaviour change) so the
-# chart stays deployable while each context is validated per image — note the
-# frontend binds :80 and needs NET_BIND_SERVICE or a non-root port before caps
-# can be dropped. The operator chart is the reference model to copy:
-#   runAsNonRoot: true, allowPrivilegeEscalation: false,
-#   capabilities: { drop: ["ALL"] }, readOnlyRootFilesystem: true
-podSecurityContext: {}
+# ── Pod hardening (needtofix M10, Codex M5) ───────────────
+# These were empty, which meant every container kept its image's default UID and
+# full capability set and could gain privileges through a setuid binary. Three
+# workloads even had no value to set.
+#
+# What is on by default is the subset that is safe to assert without knowing the
+# image: dropping all capabilities, refusing privilege escalation, and asking for
+# the runtime's default seccomp profile. None of these grant anything an image
+# legitimately needs at these ports -- the frontend is the one exception and gets
+# NET_BIND_SERVICE back, because it binds :80.
+#
+# runAsNonRoot and readOnlyRootFilesystem are deliberately NOT defaulted. Both
+# depend on what the image writes and which user it starts as (the postgres and
+# redis entrypoints start as root and step down themselves), and asserting them
+# blind turns a working install into CrashLoopBackOff. The recommended profile,
+# once validated per image against your registry, is:
+#
+#   runAsNonRoot: true
+#   runAsUser: <the image's own uid>
+#   readOnlyRootFilesystem: true   # plus emptyDir mounts on its writable paths
+#
+# Set a workload's key to {} to opt out entirely.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
 securityContext:
-  web: {}
-  frontend: {}
-  assistant: {}
+  web: &hardened
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+  # The task pod runs automation. When task.privileged=true (the podman-in-pod
+  # execution path) the chart skips this block entirely -- the two cannot both
+  # apply, and the privileged flag is the one the operator asked for.
+  task: *hardened
+  # nginx binds :80, which needs the one capability back.
+  frontend:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+      add: ["NET_BIND_SERVICE"]
+  assistant: *hardened
+  assistantOllama: *hardened
+  postgres: *hardened
+  redis: *hardened
+  opa: *hardened
+  otelCollector: *hardened
+  init: *hardened
   assistantOllama: {}
 
 # ── Ingress ───────────────────────────────────────────────

@@ -105,6 +105,9 @@ spec:
       containers:
         - name: ollama
           image: "{{ .Values.images.assistantOllama.repository }}:{{ .Values.images.assistantOllama.tag }}"
+          {{- with .Values.securityContext.assistantOllama }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
           imagePullPolicy: {{ .Values.images.assistantOllama.pullPolicy }}
           {{- with .Values.securityContext.assistantOllama }}
           securityContext: {{- toYaml . | nindent 12 }}
@@ -190,6 +193,20 @@ spec:
               value: {{ .Values.assistant.model | quote }}
             - name: FORAIL_ASSISTANT_LOG_LEVEL
               value: {{ .Values.assistant.logLevel | quote }}
+            # Without this the chat endpoint answers anyone who can reach the
+            # Service -- which is every pod in the cluster that can route to it,
+            # since there is no NetworkPolicy by default. Beyond unmetered use of
+            # the model, the answers carry indexed documentation back out.
+            #
+            # Whatever proxies /assistant to this Service has to send
+            # `Authorization: Bearer <token>`; read it from the same Secret:
+            #   kubectl -n {{ include "forail.namespace" . }} get secret forail-secrets \
+            #     -o jsonpath='{.data.assistantChatToken}' | base64 -d
+            - name: FORAIL_ASSISTANT_CHAT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: forail-secrets
+                  key: assistantChatToken
           # First boot waits for Ollama, pulls the model (gemma3:1b ≈ 800MB)
           # over its API, and indexes docs; tolerate up to ~5 min before
           # declaring the pod unhealthy.
