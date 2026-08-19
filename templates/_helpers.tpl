@@ -101,8 +101,17 @@ Wraps DB, Redis, secrets, OTel, admin into one block to avoid drift.
   value: {{ .Values.forail.node.name | quote }}
 - name: FORAIL_NODE_TYPE
   value: {{ .Values.forail.node.type | quote }}
+{{- if and .Values.forail.tenancyEnabled (not .Values.forail.tenancy.rls) }}
+{{- fail "forail.tenancyEnabled=true requires forail.tenancy.rls=true — without row-level security the tenancy features run with no boundary behind them. Set --set forail.tenancy.rls=true, or turn tenancy off." }}
+{{- end }}
 - name: TENANCY_ENABLED
   value: {{ .Values.forail.tenancyEnabled | quote }}
+- name: TENANCY_RLS_ENABLED
+  value: {{ and .Values.forail.tenancyEnabled .Values.forail.tenancy.rls | quote }}
+- name: TENANCY_STRICT_ISOLATION_ENABLED
+  value: {{ and .Values.forail.tenancyEnabled .Values.forail.tenancy.strictIsolation | quote }}
+- name: TENANCY_RATE_LIMITING_ENABLED
+  value: {{ and .Values.forail.tenancyEnabled .Values.forail.tenancy.rateLimiting | quote }}
 - name: OTEL_ENABLED
   value: {{ .Values.forail.otel.enabled | quote }}
 - name: OTEL_EXPORTER_ENDPOINT

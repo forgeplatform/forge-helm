@@ -121,7 +121,26 @@ forail:
   node:
     name: forail-node
     type: hybrid
+  # ── Multi-tenancy ───────────────────────────────────────
+  # tenancyEnabled alone used to be the only switch the chart offered, while the
+  # controls that actually enforce isolation defaulted to off in the backend and
+  # had no value here at all -- so turning it on gave the tenancy features
+  # (quotas, branding, isolation auditing) with nothing enforcing a boundary.
+  #
+  # The chart now refuses that combination: tenancy.enabled=true requires
+  # tenancy.rls=true. Set tenancy.strictIsolation=true to block cross-tenant
+  # access rather than only audit it.
   tenancyEnabled: false
+  tenancy:
+    # Row-Level Security. Postgres policies scope rows to the requesting
+    # tenant's organization; without it "multi-tenant" means only that the UI
+    # shows a tenant name.
+    rls: true
+    # False audits cross-tenant access and allows it; true returns 403. Still
+    # requires the organization's own tenant_isolation_strict flag.
+    strictIsolation: false
+    # Per-tenant API rate limiting. Needs Redis.
+    rateLimiting: false
   otel:
     enabled: true
     endpoint: "http://forail-otel-collector:4317"
