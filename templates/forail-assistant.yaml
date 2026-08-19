@@ -105,6 +105,9 @@ spec:
       containers:
         - name: ollama
           image: "{{ .Values.images.assistantOllama.repository }}:{{ .Values.images.assistantOllama.tag }}"
+          {{- with .Values.securityContext.assistantOllama }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
           imagePullPolicy: {{ .Values.images.assistantOllama.pullPolicy }}
           {{- with .Values.securityContext.assistantOllama }}
           securityContext: {{- toYaml . | nindent 12 }}

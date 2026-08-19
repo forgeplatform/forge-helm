@@ -22,6 +22,9 @@ spec:
       {{- if .Values.task.hostCgroup }}
       hostPID: false
       {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: forail-task
           image: "{{ .Values.images.backend.repository }}:{{ .Values.images.backend.tag }}"
@@ -30,6 +33,10 @@ spec:
           {{- if .Values.task.privileged }}
           securityContext:
             privileged: true
+          {{- else }}
+          {{- with .Values.securityContext.task }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- end }}
           env:
             {{- include "forail.backendEnv" . | nindent 12 }}

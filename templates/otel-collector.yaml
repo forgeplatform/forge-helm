@@ -35,9 +35,15 @@ spec:
       labels:
         {{- include "forail.componentLabels" (dict "root" . "component" "otel-collector") | nindent 8 }}
     spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: otel-collector
           image: "{{ .Values.images.otelCollector.repository }}:{{ .Values.images.otelCollector.tag }}"
+          {{- with .Values.securityContext.otelCollector }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
           args: ["--config=/etc/otel/config.yaml"]
           ports:
             - { name: otlp-grpc, containerPort: 4317 }

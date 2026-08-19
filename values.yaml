@@ -291,18 +291,53 @@ assistant:
 networkPolicy:
   enabled: false
 
-# ── Pod hardening (needtofix M10) ─────────────────────────
-# Per-workload securityContext. Empty by default (no behaviour change) so the
-# chart stays deployable while each context is validated per image — note the
-# frontend binds :80 and needs NET_BIND_SERVICE or a non-root port before caps
-# can be dropped. The operator chart is the reference model to copy:
-#   runAsNonRoot: true, allowPrivilegeEscalation: false,
-#   capabilities: { drop: ["ALL"] }, readOnlyRootFilesystem: true
-podSecurityContext: {}
+# ── Pod hardening (needtofix M10, Codex M5) ───────────────
+# These were empty, which meant every container kept its image's default UID and
+# full capability set and could gain privileges through a setuid binary. Three
+# workloads even had no value to set.
+#
+# What is on by default is the subset that is safe to assert without knowing the
+# image: dropping all capabilities, refusing privilege escalation, and asking for
+# the runtime's default seccomp profile. None of these grant anything an image
+# legitimately needs at these ports -- the frontend is the one exception and gets
+# NET_BIND_SERVICE back, because it binds :80.
+#
+# runAsNonRoot and readOnlyRootFilesystem are deliberately NOT defaulted. Both
+# depend on what the image writes and which user it starts as (the postgres and
+# redis entrypoints start as root and step down themselves), and asserting them
+# blind turns a working install into CrashLoopBackOff. The recommended profile,
+# once validated per image against your registry, is:
+#
+#   runAsNonRoot: true
+#   runAsUser: <the image's own uid>
+#   readOnlyRootFilesystem: true   # plus emptyDir mounts on its writable paths
+#
+# Set a workload's key to {} to opt out entirely.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
 securityContext:
-  web: {}
-  frontend: {}
-  assistant: {}
+  web: &hardened
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+  # The task pod runs automation. When task.privileged=true (the podman-in-pod
+  # execution path) the chart skips this block entirely -- the two cannot both
+  # apply, and the privileged flag is the one the operator asked for.
+  task: *hardened
+  # nginx binds :80, which needs the one capability back.
+  frontend:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+      add: ["NET_BIND_SERVICE"]
+  assistant: *hardened
+  assistantOllama: *hardened
+  postgres: *hardened
+  redis: *hardened
+  opa: *hardened
+  otelCollector: *hardened
+  init: *hardened
   assistantOllama: {}
 
 # ── Ingress ───────────────────────────────────────────────

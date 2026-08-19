@@ -50,9 +50,15 @@ spec:
       labels:
         {{- include "forail.componentLabels" (dict "root" . "component" "redis") | nindent 8 }}
     spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: redis
           image: "{{ .Values.images.redis.repository }}:{{ .Values.images.redis.tag }}"
+          {{- with .Values.securityContext.redis }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
           # requirepass is read from the environment rather than written into
           # args: an argument is visible in the pod spec, in `kubectl describe`
           # and in the container's own /proc.
