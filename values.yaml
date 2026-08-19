@@ -82,6 +82,11 @@ secrets:
   postgresPassword: ""
   forailSecretKey: ""
   forailBroadcastWebsocketSecret: ""
+  # Redis requirepass. A ClusterIP Service is reachable by every pod that can
+  # route to it, and an unauthenticated Redis holds the cache, the task queue
+  # and the websocket channel layer -- readable, writable, and one FLUSHALL from
+  # empty. Generated on first install and reused on upgrade, like the others.
+  redisPassword: ""
   # Required — no default; install fails if unset:
   forailAdminPassword: ""
 

@@ -57,6 +57,11 @@ Wraps DB, Redis, secrets, OTel, admin into one block to avoid drift.
   value: forail-redis
 - name: REDIS_PORT
   value: "6379"
+- name: REDIS_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: forail-secrets
+      key: redisPassword
 - name: FORAIL_SECRET_KEY
   valueFrom:
     secretKeyRef:

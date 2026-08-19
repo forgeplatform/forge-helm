@@ -53,7 +53,23 @@ spec:
       containers:
         - name: redis
           image: "{{ .Values.images.redis.repository }}:{{ .Values.images.redis.tag }}"
-          args: ["redis-server", "--appendonly", "yes"]
+          # requirepass is read from the environment rather than written into
+          # args: an argument is visible in the pod spec, in `kubectl describe`
+          # and in the container's own /proc.
+          args: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$REDIS_PASSWORD\""]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: forail-secrets
+                  key: redisPassword
+            # redis-cli picks the password up from REDISCLI_AUTH, so the probes
+            # below authenticate without putting it on their command line.
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: forail-secrets
+                  key: redisPassword
           ports:
             - name: redis
               containerPort: 6379
