@@ -331,28 +331,51 @@ podSecurityContext:
   seccompProfile:
     type: RuntimeDefault
 securityContext:
-  web: &hardened
-    allowPrivilegeEscalation: false
-    capabilities:
-      drop: ["ALL"]
+  # Components whose PID 1 is already the unprivileged user, touching
+  # nothing they do not own. These can drop everything.
+  #
   # The task pod runs automation. When task.privileged=true (the podman-in-pod
   # execution path) the chart skips this block entirely -- the two cannot both
   # apply, and the privileged flag is the one the operator asked for.
-  task: *hardened
-  # nginx binds :80, which needs the one capability back.
-  frontend:
+  task: &hardened
     allowPrivilegeEscalation: false
     capabilities:
       drop: ["ALL"]
-      add: ["NET_BIND_SERVICE"]
   assistant: *hardened
   assistantOllama: *hardened
-  postgres: *hardened
   redis: *hardened
   opa: *hardened
   otelCollector: *hardened
   init: *hardened
-  assistantOllama: {}
+
+  # These three start as root on purpose: they fix ownership on their own
+  # runtime directories and then drop to their own user. Dropping ALL takes
+  # CHOWN (and the setuid/setgid pair they drop with) away, so they never
+  # reach the point of dropping privileges at all -- they die at startup:
+  #
+  #   nginx:    chown("/var/lib/nginx/body", 65534) failed (Operation not permitted)
+  #   frontend: chown("/var/cache/nginx/client_temp", 101) failed (Operation not permitted)
+  #   postgres: chown: /var/lib/postgresql/data/pgdata: Operation not permitted
+  #
+  # Granting exactly what the entrypoint needs keeps the rest of the drop
+  # meaningful. This is still far short of running unconfined -- and it is
+  # strictly better than the "hardened" version that did not run.
+  #
+  # NET_BIND_SERVICE: both nginx instances bind :80.
+  web: &rootStartsThenDrops
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+      add: ["CHOWN", "SETUID", "SETGID", "NET_BIND_SERVICE"]
+  frontend: *rootStartsThenDrops
+  # The postgres entrypoint also has to read and re-own an existing PGDATA
+  # from a previous container, hence FOWNER and DAC_OVERRIDE. It binds 5432,
+  # which is unprivileged, so no NET_BIND_SERVICE.
+  postgres:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+      add: ["CHOWN", "FOWNER", "DAC_OVERRIDE", "SETUID", "SETGID"]
 
 # ── Ingress ───────────────────────────────────────────────
 ingress:
