@@ -9,6 +9,77 @@ and the chart uses SemVer (`version`) plus the upstream Forail CalVer
 
 ## [Unreleased]
 
+### Security
+- **Redis now requires a password.** It ran `redis-server --appendonly yes` and
+  nothing else, on a ClusterIP Service, so any pod that could route to it could
+  read and write the cache, the task queue and the websocket channel layer — or
+  empty all three with one `FLUSHALL`. The password is generated on first install
+  and reused on upgrade; it is passed through the environment rather than args,
+  and the probes authenticate via `REDISCLI_AUTH`, so it appears in neither the
+  pod spec nor a command line.
+- **The assistant requires a bearer token.** `FORAIL_ASSISTANT_CHAT_TOKEN` was
+  unset, which the assistant reads as "no authentication", and the chart passed
+  only the model and log level — so `assistant.enabled=true` gave a chat endpoint
+  open to every pod in the cluster, answering with indexed documentation. The
+  chart still does not route it through the Ingress.
+- **Every workload drops all capabilities and refuses privilege escalation.**
+  `podSecurityContext` and the `securityContext.*` keys were empty, and six
+  workloads had no key at all. The frontend keeps `NET_BIND_SERVICE` for `:80`.
+  `runAsNonRoot` and `readOnlyRootFilesystem` are documented but not defaulted —
+  both depend on what an image writes and which user it starts as.
+- **`forail.tenancyEnabled=true` now requires `forail.tenancy.rls=true`.** The
+  single switch the chart offered turned on quotas, branding and isolation
+  auditing while row-level security stayed off with no value to set, so an
+  install could look multi-tenant with nothing enforcing a boundary. Adds
+  `forail.tenancy.{rls,strictIsolation,rateLimiting}`; RLS defaults to true.
+
+### Fixed
+- **The default install could not run a job.** `forail.node.type` defaulted to
+  `hybrid` (podman inside the task pod) while `task.privileged` defaulted to
+  false — the one combination where podman fails on the overlay mount and every
+  job stays `Pending`. The default is now `control`: each job runs as its own
+  Kubernetes pod through receptor's `kubernetes-incluster-auth` work type, which
+  the chart already shipped everything for. `hybrid` without privileges now fails
+  the render instead of installing quietly. `init.sh` no longer forces the
+  default instance group back to a regular group regardless of node type.
+
+### Changed
+- `images.opa` and `images.otelCollector` are pinned. Neither pin changes what
+  runs today: the collector's `latest` genuinely moves (rebuilt 2026-08-18, now
+  `0.159.0`), while OPA's `latest-rootless` turned out to be a frozen orphan —
+  upstream stopped publishing `-rootless` after `0.58.0` in October 2023.
+
+### Added
+- **`forail-assistant-ollama` Deployment, Service and PVC.** The model server is
+  no longer part of the assistant image; it runs beside it from
+  `images.assistantOllama` (`ollama/ollama`, pinned). The Service is ClusterIP —
+  Ollama has no authentication, so only the API is allowed to reach it.
+- `assistant.ollama.gpu.enabled` requests `nvidia.com/gpu` **on that pod alone**,
+  so only the model server has to land on a GPU node while the API stays
+  schedulable anywhere. Off by default: the request pins the pod to a node
+  advertising the device, so without one the pod stays `Pending`.
+- `assistant.ollama.{nodeSelector,tolerations,storage,resources}` for placing and
+  sizing the model server independently of the API.
+
+### Changed
+- `images.assistantOllama` is pinned to `ollama/ollama:0.30.10` rather than
+  tracking `latest`. The assistant image used to carry a binary copied out of
+  `latest`, and an upstream layout change broke inference silently — the server
+  answered `/api/tags` so the health check passed, while every generation
+  returned 500. Bump this tag deliberately.
+- `assistant.resources` drops to `512Mi/250m` requests and `2Gi/1000m` limits:
+  inference left this pod, so the budget only has to cover Chroma, uvicorn and
+  the first-boot indexing spike.
+
+### Breaking
+- **`assistant.storage.size` 20Gi → 5Gi.** Model blobs moved to
+  `forail-assistant-ollama-models` (20Gi), so the index claim is now sized by
+  the corpus. PVCs cannot shrink: an existing install with `assistant.enabled=true`
+  will fail the upgrade on the immutable field. Either delete the
+  `forail-assistant-data` claim — the vector index rebuilds itself from
+  `docs_to_index/`, nothing irreplaceable is stored there — or keep the old size
+  with `--set assistant.storage.size=20Gi`. Fresh installs need no action.
+
 ## [2026.7.1] - 2026-07-26
 
 ### Fixed

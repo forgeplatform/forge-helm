@@ -32,9 +32,15 @@ spec:
               echo "Waiting for redis..."
               until nc -z forail-redis 6379; do sleep 2; done
               echo "Dependencies ready."
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: forail-init
           image: "{{ .Values.images.backend.repository }}:{{ .Values.images.backend.tag }}"
+          {{- with .Values.securityContext.init }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
           imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
           command: ["/bin/bash", "/etc/forail/init.sh"]
           env:

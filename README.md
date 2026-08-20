@@ -57,6 +57,27 @@ This chart ships **no working secret defaults**:
 - `podSecurityContext` and per-workload `securityContext.{web,frontend,assistant}`
   are available for pod hardening (empty by default; validate per image — the
   frontend binds `:80` and needs `NET_BIND_SERVICE` or a non-root port).
+- **Job execution defaults to Kubernetes container groups** (`forail.node.type`
+  is now `control`, was `hybrid`). Jobs run as separate pods rather than through
+  podman inside the task pod, so no workload needs privileges. An install that
+  wants the podman path must now say so *and* enable it: `hybrid` without
+  `task.privileged=true` fails the render instead of producing an install where
+  every job stays `Pending`.
+- **Redis now requires a password.** Generated on first install, reused on
+  upgrade. An existing install picks it up on the next `helm upgrade`; nothing
+  outside the chart should be talking to that Service, but anything that is will
+  need the credential from `forail-secrets`.
+- **`forail.tenancyEnabled=true` now requires `forail.tenancy.rls=true`.** The
+  previous single switch turned on the tenancy features with no row-level
+  security behind them.
+- **Every workload now drops all capabilities and refuses privilege escalation**
+  by default, with the frontend keeping `NET_BIND_SERVICE`. Override per workload
+  under `securityContext.*`; set a key to `{}` to opt out.
+- **`assistant.storage.size` dropped 20Gi → 5Gi** when the model server moved to
+  its own claim. PVCs cannot shrink, so an existing install with the assistant
+  enabled keeps its 20Gi claim and the upgrade fails on the immutable field —
+  delete `forail-assistant-data` (the vector index rebuilds itself) or pin
+  `--set assistant.storage.size=20Gi`. Fresh installs are unaffected.
 
 ## Running jobs in the cluster
 
@@ -77,8 +98,48 @@ in place, all shipped by the chart:
    `kubernetes-incluster-auth` (`authmethod: incluster`). Without it launches
    fail at 0s with `unknown work type kubernetes-incluster-auth`.
 
-The podman-in-pod execution path additionally needs `--set task.privileged=true
---set task.hostCgroup=true` (see the secure defaults above).
+This is the default (`forail.node.type=control`) and needs no privileges
+anywhere.
+
+The alternative, `forail.node.type=hybrid`, runs jobs through podman *inside* the
+task pod and requires `--set task.privileged=true --set task.hostCgroup=true`.
+Without both, podman fails on the overlay mount and every job stays `Pending`.
+
+Those were previously the defaults in the wrong combination — `hybrid` with
+`privileged: false` — which is the one pairing that cannot run a job at all. The
+render now refuses it and says which of the two configurations to pick, rather
+than installing something whose main function is broken.
+
+## AI assistant (optional)
+
+Off by default (`assistant.enabled=false`). When enabled it renders **two**
+Deployments, not one:
+
+| Workload | Contains | Claim |
+|----------|----------|-------|
+| `forail-assistant` | FastAPI + embedded ChromaDB | `forail-assistant-data`, 5Gi |
+| `forail-assistant-ollama` | the model server, `images.assistantOllama` | `forail-assistant-ollama-models`, 20Gi |
+
+They are split so that only the model server needs a GPU and a large volume;
+the API stays schedulable on any node. Ollama has no authentication, so its
+Service is ClusterIP and only the API talks to it.
+
+```sh
+# CPU (default)
+helm upgrade forail . -n forail --set assistant.enabled=true
+
+# GPU — requires a node advertising nvidia.com/gpu and the NVIDIA device plugin
+helm upgrade forail . -n forail \
+    --set assistant.enabled=true \
+    --set assistant.ollama.gpu.enabled=true
+```
+
+`assistant.ollama.gpu.enabled` requests `nvidia.com/gpu`, which pins that pod
+to a node advertising the device — leave it off until the cluster has one, or
+the pod stays `Pending`. `images.assistantOllama.tag` is pinned deliberately:
+the assistant image used to carry a binary copied out of `ollama/ollama:latest`,
+and an upstream layout change broke inference without a line of our code
+changing. Bump it on purpose.
 
 ## Layout
 
